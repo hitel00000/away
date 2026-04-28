@@ -1,0 +1,1 @@
+{"type":"message.created","id":"evt-1","payload":{"nick":"alice","text":"hello"}}
