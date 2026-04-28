@@ -10,21 +10,32 @@
         .status { margin-bottom: 10px; padding: 5px; border-radius: 3px; }
         .connected { background: #d4edda; color: #155724; }
         .disconnected { background: #f8d7da; color: #721c24; }
+        #input-form { margin-top: 10px; }
+        #input-field { width: 80%; padding: 8px; font-family: monospace; }
+        #send-button { padding: 8px 16px; cursor: pointer; }
     </style>
 </head>
 <body>
     <h1>Away - Message Feed</h1>
     <div id="status" class="status disconnected">Disconnected</div>
     <div id="messages"></div>
+    <form id="input-form" onsubmit="sendMessage(event)">
+        <input id="input-field" type="text" placeholder="Type message..." autocomplete="off">
+        <button id="send-button" type="submit">Send</button>
+    </form>
 
     <script>
         const ws = new WebSocket('ws://localhost:8080/ws');
         const messagesDiv = document.getElementById('messages');
         const statusDiv = document.getElementById('status');
+        const inputField = document.getElementById('input-field');
+        const sendButton = document.getElementById('send-button');
 
         ws.onopen = () => {
             statusDiv.textContent = 'Connected';
             statusDiv.className = 'status connected';
+            inputField.disabled = false;
+            sendButton.disabled = false;
         };
 
         ws.onmessage = (event) => {
@@ -46,11 +57,27 @@
         ws.onclose = () => {
             statusDiv.textContent = 'Disconnected';
             statusDiv.className = 'status disconnected';
+            inputField.disabled = true;
+            sendButton.disabled = true;
         };
 
         ws.onerror = (error) => {
             console.error('websocket error', error);
         };
+
+        function sendMessage(event) {
+            event.preventDefault();
+            const text = inputField.value.trim();
+            if (!text) return;
+
+            const command = {
+                type: 'send_message',
+                payload: { text }
+            };
+
+            ws.send(JSON.stringify(command));
+            inputField.value = '';
+        }
     </script>
 </body>
 </html>

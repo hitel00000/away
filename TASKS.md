@@ -128,7 +128,7 @@ read messages from browser.
 ---
 
 ## B-001 Message Feed UI
-Status: [ ]
+Status: [x]
 
 Implement:
 
@@ -147,7 +147,7 @@ A-005
 ---
 
 ## B-002 Send Message Input
-Status: [ ]
+Status: [x]
 
 Implement:
 

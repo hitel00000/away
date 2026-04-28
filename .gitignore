@@ -1,20 +1,41 @@
 node_modules/
 *.log
 
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# OS
-.DS_Store
-Thumbs.db
-
-# Go
+# Build output
+bin/
+dist/
 *.exe
 *.exe~
 *.dll
 *.so
 *.dylib
+awayd
+dev-feed
+
+# IDE & Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+*.sublime-*
+.DS_Store
+Thumbs.db
+
+# Go
+*.o
+*.a
+*.test
+*.out
+coverage.out
+coverage.html
+
+# Environment
+.env
+.env.local
+
+# OS temp files
+*.tmp
+*~
+.#*
+

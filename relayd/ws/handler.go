@@ -1,6 +1,8 @@
 package ws
 
 import (
+	"encoding/json"
+	"log"
 	"net/http"
 
 	"github.com/gorilla/websocket"
@@ -8,6 +10,15 @@ import (
 
 var defaultUpgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool { return true },
+}
+
+type Command struct {
+	Type    string          `json:"type"`
+	Payload json.RawMessage `json:"payload"`
+}
+
+type SendMessagePayload struct {
+	Text string `json:"text"`
 }
 
 func Handler(hub *Hub) http.Handler {
@@ -22,8 +33,24 @@ func Handler(hub *Hub) http.Handler {
 		defer hub.Unregister(client)
 
 		for {
-			if _, _, err := conn.ReadMessage(); err != nil {
+			_, data, err := conn.ReadMessage()
+			if err != nil {
 				return
+			}
+
+			var cmd Command
+			if err := json.Unmarshal(data, &cmd); err != nil {
+				log.Printf("failed to parse command: %v", err)
+				continue
+			}
+
+			if cmd.Type == "send_message" {
+				var payload SendMessagePayload
+				if err := json.Unmarshal(cmd.Payload, &payload); err != nil {
+					log.Printf("failed to parse send_message payload: %v", err)
+					continue
+				}
+				log.Printf("received send_message: %q", payload.Text)
 			}
 		}
 	})

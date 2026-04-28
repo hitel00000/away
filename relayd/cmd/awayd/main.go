@@ -14,6 +14,9 @@ func main() {
 	hub := ws.NewHub()
 	ring := relayd.NewEventRing()
 
+	// Static file serving for web UI
+	http.Handle("/", http.FileServer(http.Dir("web")))
+
 	// Websocket handler
 	http.Handle("/ws", ws.Handler(hub))
 
