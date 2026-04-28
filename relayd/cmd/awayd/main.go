@@ -3,16 +3,69 @@ package main
 import (
 	"away/relayd"
 	"away/relayd/ws"
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
+	"os"
 )
 
 func main() {
 	hub := ws.NewHub()
 	ring := relayd.NewEventRing()
+
+	const ircSocket = "/tmp/away/irc-companion.sock"
+
+	_ = os.Remove(ircSocket)
+
+	ln, err := net.Listen("unix", ircSocket)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	go func() {
+		log.Printf("irssi ingest listening on %s", ircSocket)
+
+		for {
+			conn, err := ln.Accept()
+			if err != nil {
+				continue
+			}
+
+			go func(c net.Conn) {
+				defer c.Close()
+
+				scanner := bufio.NewScanner(c)
+
+				for scanner.Scan() {
+
+					var ev relayd.Event
+
+					line := scanner.Bytes()
+
+					if err := json.Unmarshal(line, &ev); err != nil {
+						log.Printf(
+							"invalid irssi event: %v",
+							err,
+						)
+						continue
+					}
+
+					ring.Append(ev)
+
+					if err := hub.BroadcastEvent(ev); err != nil {
+						log.Printf(
+							"broadcast failed: %v",
+							err,
+						)
+					}
+				}
+			}(conn)
+		}
+	}()
 
 	// Static file serving for web UI
 	http.Handle("/", http.FileServer(http.Dir("web")))
