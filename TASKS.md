@@ -174,7 +174,7 @@ end-to-end real message flow.
 ---
 
 ## C-001 Public/Private Signal Hooks
-Status: [ ]
+Status: [x]
 
 Implement:
 
@@ -193,7 +193,7 @@ A-002
 ---
 
 ## C-002 Relay → Plugin Send Path
-Status: [ ]
+Status: [x]
 
 Implement:
 
