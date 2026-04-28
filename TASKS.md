@@ -102,7 +102,7 @@ A-003
 ---
 
 ## A-005 Fixture Replay Feed
-Status: [ ]
+Status: [x]
 
 Implement:
 

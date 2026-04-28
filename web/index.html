@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Away - Message Feed</title>
+    <style>
+        body { font-family: monospace; margin: 20px; }
+        #messages { border: 1px solid #ccc; padding: 10px; height: 400px; overflow-y: auto; }
+        .message { margin: 5px 0; padding: 5px; border-left: 3px solid #0066cc; }
+        .nick { font-weight: bold; }
+        .status { margin-bottom: 10px; padding: 5px; border-radius: 3px; }
+        .connected { background: #d4edda; color: #155724; }
+        .disconnected { background: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+    <h1>Away - Message Feed</h1>
+    <div id="status" class="status disconnected">Disconnected</div>
+    <div id="messages"></div>
+
+    <script>
+        const ws = new WebSocket('ws://localhost:8080/ws');
+        const messagesDiv = document.getElementById('messages');
+        const statusDiv = document.getElementById('status');
+
+        ws.onopen = () => {
+            statusDiv.textContent = 'Connected';
+            statusDiv.className = 'status connected';
+        };
+
+        ws.onmessage = (event) => {
+            try {
+                const ev = JSON.parse(event.data);
+                if (ev.type === 'message.created') {
+                    const msg = ev.payload;
+                    const el = document.createElement('div');
+                    el.className = 'message';
+                    el.innerHTML = `<span class="nick">${msg.nick}</span>: ${msg.text}`;
+                    messagesDiv.appendChild(el);
+                    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+                }
+            } catch (e) {
+                console.error('parse error', e);
+            }
+        };
+
+        ws.onclose = () => {
+            statusDiv.textContent = 'Disconnected';
+            statusDiv.className = 'status disconnected';
+        };
+
+        ws.onerror = (error) => {
+            console.error('websocket error', error);
+        };
+    </script>
+</body>
+</html>
