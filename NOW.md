@@ -1,53 +1,73 @@
 # NOW.md
 
-Current Focus
+Current focus: Phase 0.2 complete / entering Phase 0.3
 
-Phase 0.2 usability pass.
+## Completed (Phase 0.2 Usability Pass)
 
-Do these only:
+- [x] F-001 Buffer / Unread Correctness
+- [x] F-002 Mention Inbox MVP
+- [x] F-003 Send Acknowledgement
+- [x] F-004 Presence Noise Collapse
 
----
+Phase 0.2 is considered complete.
 
-## 1. F-001 Buffer / Unread Correctness
-Current priority.
+System now has:
 
-Focus:
-- correctness over UI polish
-- verify active buffer behavior
-- verify unread accounting
+- multi-buffer navigation
+- unread correctness
+- mentions inbox
+- optimistic send feedback
+- presence noise reduction
 
-Deliver:
-minimal patch + tests
-
----
-
-## 2. F-002 Mention Inbox MVP
-Next.
-
-Focus:
-- synthetic mentions buffer only
-- minimal useful inbox
-- no advanced inbox features
-
-Deliver:
-minimal patch + tests
+The “daily companion” loop exists.
 
 ---
 
-## 3. F-003 Send Acknowledgement
-Then.
+## Current mode
 
-Focus:
-- pending vs sent feedback only
+Stabilize and validate through real use.
 
-Stop after this and reassess roadmap.
+Use the system.
+Watch for pain points.
+Prefer learning over feature growth.
+
+Do not expand scope casually.
 
 ---
 
-Do Not Start
+## Next candidate
 
-- auth
-- push
-- sqlite
-- search (unless explicitly reprioritized)
-- mobile polish rabbit holes
+Primary next spike:
+
+- [ ] G-001 Append-Only Event Journal Spike
+
+Goal:
+Survive relay/browser restart with recent context.
+
+Keep it tiny.
+
+No sqlite.
+No persistence framework.
+Just a spike.
+
+---
+
+## After G-001 reassess
+
+Possible outcomes:
+
+1. Stop at lightweight local-first companion.
+2. Explore G-002 search spike.
+3. Reprioritize based on real usage pain.
+
+No commitment yet.
+
+---
+
+## Rules
+
+- favor simplicity over capability
+- preserve single-user companion scope
+- minimal patches
+- avoid infrastructure drift
+- reassess before new phase expansion
