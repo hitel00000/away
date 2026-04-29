@@ -3,6 +3,7 @@ export function createChatState() {
   const buffers = new Map();
   const bufferOrder = [];
   const pendingSelfClientIDs = new Map();
+  const pendingSelfMessageByClientID = new Map();
   const consumedSelfAckClientIDs = new Set();
   const seenHighlightKeys = new Set();
   let activeBufferID = null;
@@ -77,15 +78,38 @@ export function createChatState() {
     return normalizeTarget("#test");
   }
 
-  function markPendingSelf(clientID, target) {
+  function markPendingSelf(clientID, target, draftMessage = null) {
     if (!clientID) return;
     const buf = normalizeTarget(target);
     pendingSelfClientIDs.set(clientID, buf.id);
+
+    if (!draftMessage) return;
+    const ensured = ensureBuffer(buf.id, buf.type, buf.label);
+    const message = {
+      ...draftMessage,
+      target,
+      client_id: clientID,
+      delivery_state: "pending",
+    };
+    ensured.messages.push(message);
+    pendingSelfMessageByClientID.set(clientID, message);
   }
 
   function clearPendingSelf(clientID) {
     if (!clientID) return;
     pendingSelfClientIDs.delete(clientID);
+    pendingSelfMessageByClientID.delete(clientID);
+  }
+
+  function failPendingSelf(clientID) {
+    if (!clientID) return false;
+    const pending = pendingSelfMessageByClientID.get(clientID);
+    if (!pending) {
+      pendingSelfClientIDs.delete(clientID);
+      return false;
+    }
+    pending.delivery_state = "failed";
+    return true;
   }
 
   function setActiveBuffer(bufferID) {
@@ -125,7 +149,17 @@ export function createChatState() {
       : derived.label;
 
     const buf = ensureBuffer(bufferID, type, label);
-    buf.messages.push(msg);
+    if (fromPending) {
+      const pending = pendingSelfMessageByClientID.get(clientID);
+      if (pending) {
+        Object.assign(pending, msg);
+        pending.delivery_state = "sent";
+      } else {
+        buf.messages.push({ ...msg, delivery_state: "sent" });
+      }
+    } else {
+      buf.messages.push(msg);
+    }
 
     // Self-correlation must use opaque client ids, not nick/text heuristics.
     const isSelf = fromPending;
@@ -136,6 +170,7 @@ export function createChatState() {
 
     if (fromPending) {
       pendingSelfClientIDs.delete(clientID);
+      pendingSelfMessageByClientID.delete(clientID);
       consumedSelfAckClientIDs.add(clientID);
     }
 
@@ -213,5 +248,6 @@ export function createChatState() {
     getActiveTarget,
     markPendingSelf,
     clearPendingSelf,
+    failPendingSelf,
   };
 }

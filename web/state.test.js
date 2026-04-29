@@ -205,3 +205,87 @@ test("duplicate highlight event_id is deduped in mentions", () => {
   assert.equal(mentions.messages.length, 1);
   assert.equal(mentions.unread, 1);
 });
+
+test("pending becomes sent on correlated ACK", () => {
+  const st = createChatState();
+  st.activateTarget("#a");
+  st.markPendingSelf("cid-f003-1", "#a", { nick: "me", text: "hello" });
+
+  let active = st.getActiveBuffer();
+  assert.equal(active.messages.length, 1);
+  assert.equal(active.messages[0].delivery_state, "pending");
+
+  recv(st, "#a", "me", "hello", "cid-f003-1");
+  active = st.getActiveBuffer();
+  assert.equal(active.messages.length, 1);
+  assert.equal(active.messages[0].delivery_state, "sent");
+});
+
+test("pending becomes failed on timeout marker", () => {
+  const st = createChatState();
+  st.activateTarget("#a");
+  st.markPendingSelf("cid-f003-2", "#a", { nick: "me", text: "hello" });
+
+  assert.equal(st.failPendingSelf("cid-f003-2"), true);
+  st.clearPendingSelf("cid-f003-2");
+
+  const active = st.getActiveBuffer();
+  assert.equal(active.messages.length, 1);
+  assert.equal(active.messages[0].delivery_state, "failed");
+});
+
+test("duplicate ACK does not duplicate or corrupt state", () => {
+  const st = createChatState();
+  st.activateTarget("#a");
+  st.markPendingSelf("cid-f003-3", "#a", { nick: "me", text: "hello" });
+  recv(st, "#a", "me", "hello", "cid-f003-3");
+  recv(st, "#a", "me", "hello", "cid-f003-3");
+
+  const active = st.getActiveBuffer();
+  assert.equal(active.messages.length, 1);
+  assert.equal(active.messages[0].delivery_state, "sent");
+});
+
+test("unrelated ACK does not mutate wrong pending", () => {
+  const st = createChatState();
+  st.activateTarget("#a");
+  st.markPendingSelf("cid-f003-4-a", "#a", { nick: "me", text: "a" });
+  st.markPendingSelf("cid-f003-4-b", "#a", { nick: "me", text: "b" });
+
+  recv(st, "#a", "me", "a", "cid-f003-4-a");
+
+  const active = st.getActiveBuffer();
+  assert.equal(active.messages.length, 2);
+  assert.equal(active.messages[0].delivery_state, "sent");
+  assert.equal(active.messages[1].delivery_state, "pending");
+});
+
+test("multiple pending ACK out-of-order resolves correctly", () => {
+  const st = createChatState();
+  st.activateTarget("#a");
+  st.markPendingSelf("cid-f003-5-a", "#a", { nick: "me", text: "first" });
+  st.markPendingSelf("cid-f003-5-b", "#a", { nick: "me", text: "second" });
+
+  recv(st, "#a", "me", "second", "cid-f003-5-b");
+  recv(st, "#a", "me", "first", "cid-f003-5-a");
+
+  const active = st.getActiveBuffer();
+  assert.equal(active.messages.length, 2);
+  assert.equal(active.messages[0].client_id, "cid-f003-5-a");
+  assert.equal(active.messages[0].delivery_state, "sent");
+  assert.equal(active.messages[1].client_id, "cid-f003-5-b");
+  assert.equal(active.messages[1].delivery_state, "sent");
+});
+
+test("timeout then late ACK settles to sent explicitly", () => {
+  const st = createChatState();
+  st.activateTarget("#a");
+  st.markPendingSelf("cid-f003-6", "#a", { nick: "me", text: "late" });
+
+  st.failPendingSelf("cid-f003-6");
+  recv(st, "#a", "me", "late", "cid-f003-6");
+
+  const active = st.getActiveBuffer();
+  assert.equal(active.messages.length, 1);
+  assert.equal(active.messages[0].delivery_state, "sent");
+});

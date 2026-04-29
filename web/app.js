@@ -13,13 +13,29 @@ const bufferList = document.getElementById("buffer-list");
 const activeTitle = document.getElementById("active-title");
 
 const PENDING_TIMEOUT_MS = 10000;
-const pendingMessages = new Map();
+const pendingMessageTimeouts = new Map();
 
-function addMessage(msg, isPending = false) {
+function deliveryMetaFor(msg) {
+  const state = msg && msg.delivery_state;
+  if (state === "pending") return { cls: "pending", label: "Pending" };
+  if (state === "failed") return { cls: "failed", label: "Unconfirmed" };
+  if (state === "sent") return { cls: "sent", label: "Sent" };
+  return null;
+}
+
+function addMessage(msg) {
   const el = document.createElement("div");
-  el.className = isPending ? "message pending" : "message";
+  const delivery = deliveryMetaFor(msg);
+  el.className = "message" + (delivery ? ` ${delivery.cls}` : "");
   const nick = msg.nick || "me";
-  el.innerHTML = `<span class="nick">${nick}</span>: ${msg.text}`;
+  const text = msg.text || "";
+  const status = delivery
+    ? `<span class="delivery ${delivery.cls}">${delivery.label}</span>`
+    : "";
+  el.innerHTML = `<span class="nick">${nick}</span>: ${text}${status}`;
+  if (delivery && delivery.cls === "failed") {
+    el.title = "Send unconfirmed (timeout)";
+  }
   messagesDiv.appendChild(el);
   messagesDiv.scrollTop = messagesDiv.scrollHeight;
   return el;
@@ -31,7 +47,7 @@ function renderMessages() {
   messagesDiv.innerHTML = "";
   const rows = active ? active.messages : [];
   for (const msg of rows) {
-    addMessage(msg, false);
+    addMessage(msg);
   }
 }
 
@@ -89,13 +105,9 @@ ws.onmessage = (event) => {
     if (ev.type === "message.created" || ev.type === "dm.created") {
       const msg = ev.payload;
       const clientId = msg.client_id;
-
-      if (clientId && pendingMessages.has(clientId)) {
-        const { el, timeoutId } = pendingMessages.get(clientId);
-        clearTimeout(timeoutId);
-        el.className = "message";
-        pendingMessages.delete(clientId);
-        el.querySelector(".nick").textContent = msg.nick || "me";
+      if (clientId && pendingMessageTimeouts.has(clientId)) {
+        clearTimeout(pendingMessageTimeouts.get(clientId));
+        pendingMessageTimeouts.delete(clientId);
       }
 
       state.receiveMessage(msg);
@@ -141,22 +153,18 @@ window.sendMessage = function sendMessage(event) {
     "cl_" + Date.now() + "_" + Math.random().toString(36).slice(2, 11);
 
   state.activateTarget(target);
-  state.markPendingSelf(clientId, target);
-
-  const activeBefore = state.getActiveBuffer();
-  const el = addMessage({ text, nick: "me" }, true);
+  state.markPendingSelf(clientId, target, { text, nick: "me" });
 
   const timeoutId = setTimeout(() => {
-    if (pendingMessages.has(clientId)) {
-      const { el: timeoutEl } = pendingMessages.get(clientId);
-      timeoutEl.className = "message unconfirmed";
-      timeoutEl.title = "Send unconfirmed (timeout)";
-      pendingMessages.delete(clientId);
+    if (pendingMessageTimeouts.has(clientId)) {
+      pendingMessageTimeouts.delete(clientId);
+      state.failPendingSelf(clientId);
       state.clearPendingSelf(clientId);
+      render();
     }
   }, PENDING_TIMEOUT_MS);
 
-  pendingMessages.set(clientId, { el, timeoutId, bufferID: activeBefore ? activeBefore.id : null });
+  pendingMessageTimeouts.set(clientId, timeoutId);
 
   const command = {
     type: "send_message",
