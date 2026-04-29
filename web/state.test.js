@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createChatState } from "./state.js";
+import { collapsePresenceEvents, createChatState } from "./state.js";
 
 function recv(st, target, nick = "alice", text = "hi", client_id = "") {
   st.receiveMessage({ target, nick, text, client_id });
@@ -288,4 +288,81 @@ test("timeout then late ACK settles to sent explicitly", () => {
   const active = st.getActiveBuffer();
   assert.equal(active.messages.length, 1);
   assert.equal(active.messages[0].delivery_state, "sent");
+});
+
+test("join burst collapses into one summary row", () => {
+  const rows = [
+    { event_type: "join", nick: "alice", text: "", ts: "2026-04-30T00:00:00Z" },
+    { event_type: "join", nick: "bob", text: "", ts: "2026-04-30T00:00:02Z" },
+    { event_type: "join", nick: "carol", text: "", ts: "2026-04-30T00:00:03Z" },
+  ];
+  const out = collapsePresenceEvents(rows);
+  assert.equal(out.length, 1);
+  assert.equal(out[0]._collapsed_presence, true);
+  assert.equal(out[0].text, "alice, bob, carol joined");
+});
+
+test("conversational messages are not collapsed", () => {
+  const rows = [
+    { nick: "alice", text: "hello", ts: "2026-04-30T00:00:00Z" },
+    { nick: "bob", text: "world", ts: "2026-04-30T00:00:01Z" },
+    { nick: "carol", text: "!" },
+  ];
+  const out = collapsePresenceEvents(rows);
+  assert.equal(out.length, 3);
+  assert.equal(out[0].text, "hello");
+  assert.equal(out[1].text, "world");
+  assert.equal(out[2].text, "!");
+});
+
+test("message boundary splits join bursts into separate groups", () => {
+  const rows = [
+    { event_type: "join", nick: "alice", ts: "2026-04-30T00:00:00Z" },
+    { event_type: "join", nick: "bob", ts: "2026-04-30T00:00:01Z" },
+    { nick: "eve", text: "real chat", ts: "2026-04-30T00:00:02Z" },
+    { event_type: "join", nick: "carol", ts: "2026-04-30T00:00:03Z" },
+    { event_type: "join", nick: "dave", ts: "2026-04-30T00:00:04Z" },
+    { event_type: "join", nick: "frank", ts: "2026-04-30T00:00:05Z" },
+  ];
+  const out = collapsePresenceEvents(rows);
+  assert.equal(out.length, 3);
+  assert.equal(out[0].event_type, "join");
+  assert.equal(out[1].text, "real chat");
+  assert.equal(out[2]._collapsed_presence, true);
+  assert.equal(out[2].text, "carol, dave, frank joined");
+});
+
+test("collapse window boundary does not eat unrelated presence events", () => {
+  const rows = [
+    { event_type: "join", nick: "alice", ts: "2026-04-30T00:00:00Z" },
+    { event_type: "join", nick: "bob", ts: "2026-04-30T00:00:10Z" },
+    { event_type: "join", nick: "carol", ts: "2026-04-30T00:00:20Z" },
+    { event_type: "join", nick: "dave", ts: "2026-04-30T00:00:21Z" },
+    { event_type: "join", nick: "erin", ts: "2026-04-30T00:00:22Z" },
+  ];
+  const out = collapsePresenceEvents(rows);
+  assert.equal(out.length, 3);
+  assert.equal(out[0].event_type, "join");
+  assert.equal(out[1].event_type, "join");
+  assert.equal(out[2]._collapsed_presence, true);
+  assert.equal(out[2].text, "carol, dave, erin joined");
+});
+
+test("part and nick presence events collapse by type", () => {
+  const partRows = [
+    { event_type: "part", nick: "alice" },
+    { event_type: "part", nick: "bob" },
+    { event_type: "part", nick: "carol" },
+  ];
+  const nickRows = [
+    { event_type: "nick", nick: "alice" },
+    { event_type: "nick", nick: "bob" },
+    { event_type: "nick", nick: "carol" },
+  ];
+  const partOut = collapsePresenceEvents(partRows);
+  const nickOut = collapsePresenceEvents(nickRows);
+  assert.equal(partOut.length, 1);
+  assert.equal(partOut[0].text, "alice, bob, carol left");
+  assert.equal(nickOut.length, 1);
+  assert.equal(nickOut[0].text, "3 users changed nick");
 });

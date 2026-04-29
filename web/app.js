@@ -1,4 +1,4 @@
-import { createChatState } from "./state.js";
+import { collapsePresenceEvents, createChatState } from "./state.js";
 
 const proto = location.protocol === "https:" ? "wss" : "ws";
 const ws = new WebSocket(`${proto}://${location.host}/ws`);
@@ -45,7 +45,7 @@ function renderMessages() {
   const active = state.getActiveBuffer();
   activeTitle.textContent = active ? active.label : "(none)";
   messagesDiv.innerHTML = "";
-  const rows = active ? active.messages : [];
+  const rows = collapsePresenceEvents(active ? active.messages : []);
   for (const msg of rows) {
     addMessage(msg);
   }

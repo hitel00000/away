@@ -251,3 +251,101 @@ export function createChatState() {
     failPendingSelf,
   };
 }
+
+const PRESENCE_TYPES = new Set(["join", "part", "quit", "nick"]);
+const PRESENCE_WINDOW_MS = 15000;
+const PRESENCE_COLLAPSE_MIN = 3;
+const PRESENCE_NAME_LIST_MAX = 3;
+
+function parseTimestampMs(value) {
+  if (!value) return null;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  const n = Date.parse(String(value));
+  return Number.isFinite(n) ? n : null;
+}
+
+function presenceTypeForMessage(msg) {
+  const type = String((msg && (msg.event_type || msg.type || msg.kind)) || "")
+    .trim()
+    .toLowerCase();
+  if (PRESENCE_TYPES.has(type)) return type;
+  return "";
+}
+
+function summarizePresenceGroup(type, rows) {
+  const names = [];
+  for (const row of rows) {
+    const nick = String((row && row.nick) || "").trim();
+    if (nick) names.push(nick);
+  }
+
+  if (type === "nick") {
+    if (names.length === 1) return `${names[0]} changed nick`;
+    return `${rows.length} users changed nick`;
+  }
+
+  const verb = type === "join"
+    ? "joined"
+    : (type === "part" ? "left" : "quit");
+  if (names.length <= PRESENCE_NAME_LIST_MAX) {
+    return `${names.join(", ")} ${verb}`;
+  }
+  return `${rows.length} users ${verb}`;
+}
+
+export function collapsePresenceEvents(rows) {
+  const result = [];
+  let pending = null;
+
+  function flushPending() {
+    if (!pending) return;
+    if (pending.rows.length >= PRESENCE_COLLAPSE_MIN) {
+      const first = pending.rows[0];
+      const last = pending.rows[pending.rows.length - 1];
+      result.push({
+        event_type: pending.type,
+        nick: "",
+        text: summarizePresenceGroup(pending.type, pending.rows),
+        ts: (last && last.ts) || (first && first.ts) || "",
+        timestamp: (last && last.timestamp) || (first && first.timestamp) || "",
+        _collapsed_presence: true,
+        _presence_count: pending.rows.length,
+      });
+    } else {
+      result.push(...pending.rows);
+    }
+    pending = null;
+  }
+
+  for (const row of rows || []) {
+    const presenceType = presenceTypeForMessage(row);
+    if (!presenceType) {
+      flushPending();
+      result.push(row);
+      continue;
+    }
+
+    const rowTs = parseTimestampMs(row && (row.ts || row.timestamp));
+    if (!pending) {
+      pending = { type: presenceType, rows: [row], firstTs: rowTs };
+      continue;
+    }
+
+    const sameType = pending.type === presenceType;
+    const withinWindow = (
+      pending.firstTs === null ||
+      rowTs === null ||
+      rowTs - pending.firstTs <= PRESENCE_WINDOW_MS
+    );
+
+    if (sameType && withinWindow) {
+      pending.rows.push(row);
+      continue;
+    }
+
+    flushPending();
+    pending = { type: presenceType, rows: [row], firstTs: rowTs };
+  }
+  flushPending();
+  return result;
+}
