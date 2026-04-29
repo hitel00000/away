@@ -135,6 +135,39 @@ func TestConcurrentReconnectDuplicate(t *testing.T) {
 	wg.Wait()
 }
 
+func TestHubPreservesClientID(t *testing.T) {
+	hub := NewHub(relayd.NewEventRing())
+	srv := httptest.NewServer(Handler(hub))
+	defer srv.Close()
+
+	c := mustDialWS(t, srv.URL)
+	defer c.Close()
+
+	clientID := "test-client-id"
+	event := relayd.Event{
+		Type:    "message.created",
+		Version: 1,
+		ID:      "evt-1",
+		Payload: json.RawMessage(`{"text":"hello","client_id":"` + clientID + `"}`),
+	}
+
+	if err := hub.BroadcastEvent(event); err != nil {
+		t.Fatalf("broadcast failed: %v", err)
+	}
+
+	got := mustReadEvent(t, c)
+	var payload struct {
+		ClientID string `json:"client_id"`
+	}
+	if err := json.Unmarshal(got.Payload, &payload); err != nil {
+		t.Fatalf("unmarshal payload failed: %v", err)
+	}
+
+	if payload.ClientID != clientID {
+		t.Fatalf("expected client_id %q, got %q", clientID, payload.ClientID)
+	}
+}
+
 func mustDialWS(t *testing.T, serverURL string) *websocket.Conn {
 	t.Helper()
 	wsURL := "ws" + strings.TrimPrefix(serverURL, "http")

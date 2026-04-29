@@ -19,8 +19,9 @@ type Command struct {
 }
 
 type SendMessagePayload struct {
-	Text   string `json:"text"`
-	Target string `json:"target"`
+	ClientID string `json:"client_id"`
+	Text     string `json:"text"`
+	Target   string `json:"target"`
 }
 
 const irssiCommandFifo = "/tmp/away/irc-companion.cmd"
@@ -57,9 +58,10 @@ func Handler(hub *Hub) http.Handler {
 				log.Printf("received send_message: %q %q", payload.Target, payload.Text)
 
 				line, err := json.Marshal(map[string]any{
-					"action": "send_message",
-					"target": payload.Target,
-					"text":   payload.Text,
+					"action":    "send_message",
+					"client_id": payload.ClientID,
+					"target":    payload.Target,
+					"text":      payload.Text,
 				})
 
 				if err != nil {

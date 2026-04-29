@@ -6,12 +6,12 @@ use IO::Socket::UNIX;
 use Time::HiRes qw(time);
 use Fcntl qw(O_RDONLY O_NONBLOCK);
 
-our $VERSION = '0.2';
+our $VERSION = '0.3';
 
 our %IRSSI = (
   authors     => 'Away',
   name        => 'away_bridge',
-  description => 'C-001/C-002 irssi bridge',
+  description => 'D-003a irssi bridge',
   license     => 'MIT',
 );
 
@@ -34,6 +34,10 @@ our @outbound_queue = ();
 our $MAX_QUEUE      = 100;
 our $event_sock;
 
+# D-003a: FIFO queue for opaque client_id correlation.
+# Assumption: Irssi signals for own messages arrive in the same order
+# as the commands were issued. This avoids text matching or heuristics.
+our @pending_ids = ();
 
 #
 # -------------------------
@@ -131,31 +135,33 @@ sub emit_json {
 #
 
 sub public_event_json {
-
-  my ($server,$target,$nick,$text)=@_;
+  my ($server,$target,$nick,$text,$client_id)=@_;
+  $client_id ||= "";
 
   return sprintf(
-'{"type":"message.created","version":1,"id":"%s","timestamp":"%s","payload":{"network":"%s","buffer_id":"chan:%s","buffer_type":"channel","nick":"%s","text":"%s","highlight":false,"tags":[]}}',
+'{"type":"message.created","version":1,"id":"%s","timestamp":"%s","payload":{"network":"%s","buffer_id":"chan:%s","buffer_type":"channel","nick":"%s","text":"%s","highlight":false,"tags":[],"client_id":"%s"}}',
       event_id(),
       iso_ts(),
       json_escape($server->{tag}),
       json_escape($target),
       json_escape($nick),
       json_escape($text),
+      json_escape($client_id),
   );
 }
 
 sub private_event_json {
-
-  my ($server,$nick,$text)=@_;
+  my ($server,$nick,$text,$client_id)=@_;
+  $client_id ||= "";
 
   return sprintf(
-'{"type":"dm.created","version":1,"id":"%s","timestamp":"%s","payload":{"network":"%s","peer":"%s","text":"%s"}}',
+'{"type":"dm.created","version":1,"id":"%s","timestamp":"%s","payload":{"network":"%s","peer":"%s","text":"%s","client_id":"%s"}}',
       event_id(),
       iso_ts(),
       json_escape($server->{tag}),
       json_escape($nick),
       json_escape($text),
+      json_escape($client_id),
   );
 }
 
@@ -165,31 +171,30 @@ sub private_event_json {
 # -------------------------
 #
 
-sub on_public_message {
-
-  my ($server,$text,$nick,$address,$target)=@_;
-
-  emit_json(
-      public_event_json(
-          $server,
-          $target,
-          $nick,
-          $text
-      )
-  );
+# message public: SERVER_REC, char *msg, char *nick, char *address, char *target
+sub on_public {
+  my ($server, $text, $nick, $address, $target) = @_;
+  emit_json(public_event_json($server, $target, $nick, $text, ""));
 }
 
-sub on_private_message {
+# message private: SERVER_REC, char *msg, char *nick, char *address, char *target
+sub on_private {
+  my ($server, $text, $nick, $address, $target) = @_;
+  emit_json(private_event_json($server, $nick, $text, ""));
+}
 
-  my ($server,$text,$nick,$address)=@_;
+# message own_public: SERVER_REC, char *msg, char *target
+sub on_own_public {
+  my ($server, $text, $target) = @_;
+  my $client_id = shift @pending_ids || "";
+  emit_json(public_event_json($server, $target, $server->{nick}, $text, $client_id));
+}
 
-  emit_json(
-      private_event_json(
-          $server,
-          $nick,
-          $text
-      )
-  );
+# message own_private: SERVER_REC, char *msg, char *target, char *orig_target
+sub on_own_private {
+  my ($server, $text, $target, $orig_target) = @_;
+  my $client_id = shift @pending_ids || "";
+  emit_json(private_event_json($server, $target, $text, $client_id));
 }
 
 #
@@ -224,6 +229,11 @@ sub parse_send_message {
 
   return unless $line =~ /"action":"send_message"/;
 
+  my $client_id = '';
+  if ($line =~ /"client_id":"([^"]+)"/) {
+      $client_id = $1;
+  }
+
   return unless $line =~ /"target":"([^"]+)"/;
   my $target=$1;
 
@@ -233,7 +243,7 @@ sub parse_send_message {
   $text =~ s/\\"/"/g;
   $text =~ s/\\\\/\\/g;
 
-  return ($target,$text);
+  return ($target,$text,$client_id);
 }
 
 sub poll_commands {
@@ -241,27 +251,23 @@ sub poll_commands {
   return 1 unless $cmd_fh;
 
   my $buf='';
+  my $n = sysread($cmd_fh, $buf, 4096);
 
-  my $n = sysread(
-      $cmd_fh,
-      $buf,
-      4096
-  );
-
-  return 1 unless defined $n;
-  return 1 if $n <= 0;
+  return 1 unless defined $n && $n > 0;
 
   for my $line (split /\n/, $buf) {
   
-      my ($target,$text)=parse_send_message($line);
+      my ($target,$text,$client_id)=parse_send_message($line);
       next unless $target;
   
       my @servers = Irssi::servers();
       next unless @servers;
   
-      $servers[0]->command(
-          "msg $target $text"
-      );
+      if ($client_id) {
+          push @pending_ids, $client_id;
+      }
+
+      $servers[0]->command("msg $target $text");
   }
 
   return 1;
@@ -273,38 +279,14 @@ sub poll_commands {
 # -------------------------
 #
 
-Irssi::signal_remove(
-  'message public',
-  'on_public_message'
-);
-
-Irssi::signal_remove(
-  'message private',
-  'on_private_message'
-);
-
-Irssi::signal_add(
-  'message public',
-  'on_public_message'
-);
-
-Irssi::signal_add(
-  'message private',
-  'on_private_message'
-);
+Irssi::signal_add('message public', 'on_public');
+Irssi::signal_add('message private', 'on_private');
+Irssi::signal_add('message own_public', 'on_own_public');
+Irssi::signal_add('message own_private', 'on_own_private');
 
 init_command_fifo();
 
-Irssi::timeout_add(
-  250,
-  'poll_commands',
-  undef
-);
+Irssi::timeout_add(250, 'poll_commands', undef);
+Irssi::timeout_add(5000, 'flush_queue', undef);
 
-Irssi::timeout_add(
-  5000,
-  'flush_queue',
-  undef
-);
-
-Irssi::print("away_bridge loaded");
+Irssi::print("away_bridge loaded (D-003a plumbing)");

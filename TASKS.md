@@ -251,15 +251,50 @@ B-001
 
 ---
 
-## D-003 Fix Self Echo Duplication
-Status: [ ]
+## D-003a Outbound Correlation ID Plumbing
+Status: [x]
+
+Implement:
+- client_id pass-through
+- own echo includes client_id
 
 Acceptance:
+identical client_id observed end-to-end
 
-sent messages appear once.
+Do not:
+- dedupe logic
+- text matching
+- UI work
+
+---
+
+## D-003b Pending Send Reconciliation
+Status: [ ]
 
 Depends on:
-C-002
+D-003a
+
+Implement:
+- optimistic pending bubble
+- reconcile on matching client_id
+- prevent duplicate render
+
+Acceptance:
+sent message appears once
+
+---
+
+## D-003c Pending Timeout Cleanup
+Status: [ ]
+
+Depends on:
+D-003b
+
+Implement:
+- failed pending expiry
+
+Acceptance:
+stuck pending clears safely
 
 ---
 
@@ -293,6 +328,8 @@ For each task:
 3. Add tests.
 4. Do not refactor unrelated code.
 5. Do not add new abstractions unless necessary.
+6. For deduplication tasks, do not use text-only matching unless explicitly required.
+   Prefer explicit identifiers and reconciliation.
 
 ---
 

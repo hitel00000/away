@@ -64,7 +64,8 @@
     <div id="status" class="status disconnected">Disconnected</div>
     <div id="messages"></div>
     <form id="input-form" onsubmit="sendMessage(event)">
-        <input id="input-field" type="text" placeholder="Type message..." autocomplete="off">
+        <input id="target-field" type="text" placeholder="#target" value="#test" style="width: 15%; padding: 8px; font-family: monospace;">
+        <input id="input-field" type="text" placeholder="Type message..." autocomplete="off" style="width: 65%; padding: 8px; font-family: monospace;">
         <button id="send-button" type="submit">Send</button>
     </form>
 
@@ -74,6 +75,7 @@
         const messagesDiv = document.getElementById('messages');
         const statusDiv = document.getElementById('status');
         const inputField = document.getElementById('input-field');
+        const targetField = document.getElementById('target-field');
         const sendButton = document.getElementById('send-button');
 
         ws.onopen = () => {
@@ -113,11 +115,18 @@
         function sendMessage(event) {
             event.preventDefault();
             const text = inputField.value.trim();
-            if (!text) return;
+            const target = targetField.value.trim();
+            if (!text || !target) return;
+
+            const clientId = 'cl_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
 
             const command = {
                 type: 'send_message',
-                payload: { text }
+                payload: { 
+                    text,
+                    client_id: clientId,
+                    target: target
+                }
             };
 
             ws.send(JSON.stringify(command));
