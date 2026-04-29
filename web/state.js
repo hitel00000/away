@@ -4,6 +4,7 @@ export function createChatState() {
   const bufferOrder = [];
   const pendingSelfClientIDs = new Map();
   const consumedSelfAckClientIDs = new Set();
+  const seenHighlightKeys = new Set();
   let activeBufferID = null;
 
   function ensureBuffer(bufferID, type, label) {
@@ -148,6 +149,22 @@ export function createChatState() {
 
   function receiveHighlight(highlight) {
     const source = deriveSourceBufferFromHighlight(highlight);
+    const key = String((highlight && highlight.event_id) || "").trim() || [
+      source.id,
+      (highlight && highlight.nick) || "",
+      (highlight && highlight.text) || "",
+      (highlight && (highlight.ts || highlight.timestamp)) || "",
+    ].join("|");
+    if (seenHighlightKeys.has(key)) {
+      const mentions = ensureBuffer(MENTIONS_BUFFER_ID, "system", "Mentions");
+      return {
+        bufferID: MENTIONS_BUFFER_ID,
+        unread: mentions.unread,
+        active: activeBufferID === MENTIONS_BUFFER_ID,
+      };
+    }
+    seenHighlightKeys.add(key);
+
     const mentions = ensureBuffer(MENTIONS_BUFFER_ID, "system", "Mentions");
     mentions.messages.push({
       source,

@@ -181,3 +181,27 @@ test("duplicate normal messages do not create mentions without highlight event",
   const mentions = st.listBuffers().find((x) => x.id === "system:mentions");
   assert.equal(mentions.messages.length, 0);
 });
+
+test("duplicate highlight event_id is deduped in mentions", () => {
+  const st = createChatState();
+  st.activateTarget("#a");
+
+  highlight(st, {
+    event_id: "hl-1",
+    source_buffer_id: "ch:#b",
+    nick: "alice",
+    text: "ping @me",
+    timestamp: "2026-04-30T00:00:00Z",
+  });
+  highlight(st, {
+    event_id: "hl-1",
+    source_buffer_id: "ch:#b",
+    nick: "alice",
+    text: "ping @me",
+    timestamp: "2026-04-30T00:00:00Z",
+  });
+
+  const mentions = st.listBuffers().find((x) => x.id === "system:mentions");
+  assert.equal(mentions.messages.length, 1);
+  assert.equal(mentions.unread, 1);
+});
