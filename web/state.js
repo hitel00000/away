@@ -1,4 +1,5 @@
 export function createChatState() {
+  const MENTIONS_BUFFER_ID = "system:mentions";
   const buffers = new Map();
   const bufferOrder = [];
   const pendingSelfClientIDs = new Map();
@@ -51,6 +52,26 @@ export function createChatState() {
     }
     if (nick) {
       return normalizeTarget(nick);
+    }
+    return normalizeTarget("#test");
+  }
+
+  function deriveSourceBufferFromHighlight(highlight) {
+    const sourceBufferID = String(
+      (highlight && (highlight.source_buffer_id || highlight.buffer_id)) || ""
+    ).trim();
+    if (sourceBufferID.startsWith("ch:")) {
+      return { id: sourceBufferID, type: "channel", label: sourceBufferID.slice(3) };
+    }
+    if (sourceBufferID.startsWith("dm:")) {
+      return { id: sourceBufferID, type: "dm", label: sourceBufferID.slice(3) };
+    }
+
+    if (highlight && highlight.target) {
+      return normalizeTarget(highlight.target);
+    }
+    if (highlight && highlight.message) {
+      return deriveBufferFromMessage(highlight.message);
     }
     return normalizeTarget("#test");
   }
@@ -125,6 +146,29 @@ export function createChatState() {
     };
   }
 
+  function receiveHighlight(highlight) {
+    const source = deriveSourceBufferFromHighlight(highlight);
+    const mentions = ensureBuffer(MENTIONS_BUFFER_ID, "system", "Mentions");
+    mentions.messages.push({
+      source,
+      nick: (highlight && highlight.nick) || "",
+      text: (highlight && highlight.text) || "",
+      ts:
+        (highlight && (highlight.ts || highlight.timestamp)) ||
+        "",
+    });
+
+    if (activeBufferID !== MENTIONS_BUFFER_ID) {
+      mentions.unread += 1;
+    }
+
+    return {
+      bufferID: MENTIONS_BUFFER_ID,
+      unread: mentions.unread,
+      active: activeBufferID === MENTIONS_BUFFER_ID,
+    };
+  }
+
   function listBuffers() {
     return bufferOrder.map((id) => buffers.get(id));
   }
@@ -138,12 +182,15 @@ export function createChatState() {
     return active ? active.label : "";
   }
 
+  ensureBuffer(MENTIONS_BUFFER_ID, "system", "Mentions");
+
   return {
     ensureBuffer,
     normalizeTarget,
     activateTarget,
     setActiveBuffer,
     receiveMessage,
+    receiveHighlight,
     listBuffers,
     getActiveBuffer,
     getActiveTarget,

@@ -100,6 +100,20 @@ ws.onmessage = (event) => {
 
       state.receiveMessage(msg);
       render();
+      return;
+    }
+
+    if (ev.type === "highlight.created") {
+      const payload = ev.payload || {};
+      state.receiveHighlight({
+        source_buffer_id: payload.source_buffer_id || payload.buffer_id || "",
+        target: payload.target || "",
+        nick: payload.nick || "",
+        text: payload.text || "",
+        timestamp: payload.timestamp || payload.ts || "",
+        message: payload.message || null,
+      });
+      render();
     }
   } catch (e) {
     console.error("parse error", e);

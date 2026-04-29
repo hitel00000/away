@@ -6,6 +6,10 @@ function recv(st, target, nick = "alice", text = "hi", client_id = "") {
   st.receiveMessage({ target, nick, text, client_id });
 }
 
+function highlight(st, payload) {
+  st.receiveHighlight(payload);
+}
+
 test("incoming message in inactive buffer increments unread", () => {
   const st = createChatState();
   st.activateTarget("#a");
@@ -119,4 +123,61 @@ test("pending self ACK must render only once", () => {
   const active = st.getActiveBuffer();
   assert.equal(active.messages.length, 1);
   assert.equal(active.unread, 0);
+});
+
+test("highlight events populate mentions buffer", () => {
+  const st = createChatState();
+  st.activateTarget("#a");
+
+  highlight(st, {
+    source_buffer_id: "ch:#b",
+    nick: "alice",
+    text: "ping @me",
+    timestamp: "2026-04-30T00:00:00Z",
+  });
+
+  const mentions = st.listBuffers().find((x) => x.id === "system:mentions");
+  assert.equal(mentions.messages.length, 1);
+  assert.equal(mentions.messages[0].source.id, "ch:#b");
+  assert.equal(mentions.messages[0].nick, "alice");
+  assert.equal(mentions.messages[0].text, "ping @me");
+});
+
+test("mentions unread increments on highlight when inactive", () => {
+  const st = createChatState();
+  st.activateTarget("#a");
+  highlight(st, { source_buffer_id: "ch:#b", nick: "alice", text: "one" });
+  highlight(st, { source_buffer_id: "ch:#b", nick: "alice", text: "two" });
+
+  const mentions = st.listBuffers().find((x) => x.id === "system:mentions");
+  assert.equal(mentions.unread, 2);
+});
+
+test("opening mentions clears only mentions unread", () => {
+  const st = createChatState();
+  st.activateTarget("#a");
+  recv(st, "#b", "alice", "regular");
+  highlight(st, { source_buffer_id: "ch:#b", nick: "alice", text: "highlight" });
+
+  const beforeSource = st.listBuffers().find((x) => x.id === "ch:#b");
+  const beforeMentions = st.listBuffers().find((x) => x.id === "system:mentions");
+  assert.equal(beforeSource.unread, 1);
+  assert.equal(beforeMentions.unread, 1);
+
+  st.setActiveBuffer("system:mentions");
+
+  const afterSource = st.listBuffers().find((x) => x.id === "ch:#b");
+  const afterMentions = st.listBuffers().find((x) => x.id === "system:mentions");
+  assert.equal(afterMentions.unread, 0);
+  assert.equal(afterSource.unread, 1);
+});
+
+test("duplicate normal messages do not create mentions without highlight event", () => {
+  const st = createChatState();
+  st.activateTarget("#a");
+  recv(st, "#b", "alice", "ping @me");
+  recv(st, "#b", "alice", "ping @me");
+
+  const mentions = st.listBuffers().find((x) => x.id === "system:mentions");
+  assert.equal(mentions.messages.length, 0);
 });
