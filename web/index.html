@@ -27,7 +27,7 @@
             border-left-style: dashed;
         }
 
-        .message.failed {
+        .message.unconfirmed {
             border-left-color: #dc3545;
             color: #721c24;
         }
@@ -95,6 +95,7 @@
             sendButton.disabled = false;
         };
 
+        const PENDING_TIMEOUT_MS = 10000;
         const pendingMessages = new Map();
 
         function addMessage(msg, isPending = false) {
@@ -154,11 +155,14 @@
             const timeoutId = setTimeout(() => {
                 if (pendingMessages.has(clientId)) {
                     const { el } = pendingMessages.get(clientId);
-                    el.className = 'message failed';
-                    el.title = 'Send timed out';
+                    el.className = 'message unconfirmed';
+                    el.title = 'Send unconfirmed (timeout)';
+                    // NOTE: If a late ACK arrives after this timeout,
+                    // it will result in a duplicate message as the
+                    // pending entry has been cleared. (Accepted debt).
                     pendingMessages.delete(clientId);
                 }
-            }, 10000);
+            }, PENDING_TIMEOUT_MS);
 
             pendingMessages.set(clientId, { el, timeoutId });
 
