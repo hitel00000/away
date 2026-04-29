@@ -14,3 +14,15 @@ Rules:
 
 Forbidden failure mode:
 Do not turn this into a general chat platform.
+
+For correlation tasks:
+
+Use explicit identifiers only.
+
+Never correlate messages by:
+- text
+- nick
+- target:text composite keys
+- timing heuristics
+
+Correlation must use opaque ids only.
