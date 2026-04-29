@@ -1,0 +1,12 @@
+{
+  "type": "dm.created",
+  "version": 1,
+  "id": "evt-2",
+  "timestamp": "2026-04-28T12:01:00Z",
+  "payload": {
+    "network": "libera",
+    "peer": "bob",
+    "text": "hey alice",
+    "client_id": "cl_123"
+  }
+}

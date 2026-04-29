@@ -1,0 +1,8 @@
+{
+  "type": "send_message",
+  "payload": {
+    "client_id": "cl_123",
+    "text": "msg text",
+    "target": "#test"
+  }
+}

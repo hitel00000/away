@@ -75,7 +75,7 @@ Priority: High
 ---
 
 ## E-003 Event schema freeze (v1)
-Status: [ ]
+Status: [x]
 
 Implement:
 - review current emitted schemas
@@ -83,7 +83,8 @@ Implement:
 - document message.created and dm.created as stable
 
 Acceptance:
-schema fixtures committed.
+- schema fixtures committed.
+- schema drift test passes.
 
 Priority: High
 
