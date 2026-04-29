@@ -269,7 +269,7 @@ Do not:
 ---
 
 ## D-003b Pending Send Reconciliation
-Status: [ ]
+Status: [x]
 
 Depends on:
 D-003a

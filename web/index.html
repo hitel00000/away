@@ -22,6 +22,11 @@
             border-left: 3px solid #0066cc;
         }
 
+        .message.pending {
+            opacity: 0.6;
+            border-left-style: dashed;
+        }
+
         .nick {
             font-weight: bold;
         }
@@ -85,16 +90,35 @@
             sendButton.disabled = false;
         };
 
+        const pendingMessages = new Map();
+
+        function addMessage(msg, isPending = false) {
+            const el = document.createElement('div');
+            el.className = isPending ? 'message pending' : 'message';
+            const nick = msg.nick || 'me';
+            el.innerHTML = `<span class="nick">${nick}</span>: ${msg.text}`;
+            messagesDiv.appendChild(el);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            return el;
+        }
+
         ws.onmessage = (event) => {
             try {
                 const ev = JSON.parse(event.data);
-                if (ev.type === 'message.created') {
+                if (ev.type === 'message.created' || ev.type === 'dm.created') {
                     const msg = ev.payload;
-                    const el = document.createElement('div');
-                    el.className = 'message';
-                    el.innerHTML = `<span class="nick">${msg.nick}</span>: ${msg.text}`;
-                    messagesDiv.appendChild(el);
-                    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+                    const clientId = msg.client_id;
+
+                    if (clientId && pendingMessages.has(clientId)) {
+                        const el = pendingMessages.get(clientId);
+                        el.className = 'message';
+                        pendingMessages.delete(clientId);
+                        // Update nick from server event
+                        el.querySelector('.nick').textContent = msg.nick || 'me';
+                        return;
+                    }
+
+                    addMessage(msg);
                 }
             } catch (e) {
                 console.error('parse error', e);
@@ -119,6 +143,8 @@
             if (!text || !target) return;
 
             const clientId = 'cl_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+            const el = addMessage({ text, nick: 'me' }, true);
+            pendingMessages.set(clientId, el);
 
             const command = {
                 type: 'send_message',

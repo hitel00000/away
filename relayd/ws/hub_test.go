@@ -168,6 +168,48 @@ func TestHubPreservesClientID(t *testing.T) {
 	}
 }
 
+func TestIdenticalMessagesWithDifferentClientIDs(t *testing.T) {
+	hub := NewHub(relayd.NewEventRing())
+	srv := httptest.NewServer(Handler(hub))
+	defer srv.Close()
+
+	c := mustDialWS(t, srv.URL)
+	defer c.Close()
+
+	ev1 := relayd.Event{
+		Type:    "message.created",
+		Version: 1,
+		ID:      "evt-1",
+		Payload: json.RawMessage(`{"text":"hello","client_id":"cl-1"}`),
+	}
+	ev2 := relayd.Event{
+		Type:    "message.created",
+		Version: 1,
+		ID:      "evt-2",
+		Payload: json.RawMessage(`{"text":"hello","client_id":"cl-2"}`),
+	}
+
+	hub.BroadcastEvent(ev1)
+	hub.BroadcastEvent(ev2)
+
+	g1 := mustReadEvent(t, c)
+	g2 := mustReadEvent(t, c)
+
+	if g1.ID != ev1.ID || g2.ID != ev2.ID {
+		t.Fatalf("expected ev1 and ev2, got %q and %q", g1.ID, g2.ID)
+	}
+
+	var p1, p2 struct {
+		ClientID string `json:"client_id"`
+	}
+	json.Unmarshal(g1.Payload, &p1)
+	json.Unmarshal(g2.Payload, &p2)
+
+	if p1.ClientID != "cl-1" || p2.ClientID != "cl-2" {
+		t.Fatalf("expected cl-1 and cl-2, got %q and %q", p1.ClientID, p2.ClientID)
+	}
+}
+
 func mustDialWS(t *testing.T, serverURL string) *websocket.Conn {
 	t.Helper()
 	wsURL := "ws" + strings.TrimPrefix(serverURL, "http")
