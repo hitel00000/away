@@ -1,362 +1,136 @@
 # TASKS.md
 
-Away MVP implementation backlog.
+Away MVP backlog (post D-003)
 
-Status legend:
-
+Status
 - [ ] todo
 - [~] in progress
 - [x] done
 - [blocked]
 
 Rule:
-
-Work top-to-bottom unless explicitly reprioritized.
-
+Work top-to-bottom.
 Do not expand scope.
+Prefer robustness over feature growth.
 
 ---
 
-# Milestone A — Walking Skeleton
+# Completed
+
+A-001 [x]
+A-002 [x]
+A-003 [x]
+A-004 [x]
+A-005 [x]
+
+B-001 [x]
+B-002 [x]
+
+C-001 [x]
+C-002 [x]
+
+D-001 [x]
+D-002 [x]
+D-003a [x]
+D-003b [x]
+D-003c [x]
+
+---
+
+# Milestone E — MVP Hardening
 
 Goal:
+Validate assumptions and remove highest-risk defects.
 
-phone receives IRC events.
+## E-001 Verify own-message ordering assumption
+Status: [ ]
 
----
-
-## A-001 Repository Bootstrap
-Status: [x]
-
-Deliverables:
-
-- monorepo structure
-- Makefile works
-- relay placeholder boots
-
-Acceptance:
-
-- `make run-relay` succeeds
-
----
-
-## A-002 Protocol Event Envelope
-Status: [x]
+Problem:
+D-003a assumes send order == irssi own echo order.
 
 Implement:
-
-- Event struct
-- `message.created`
-- fixture NDJSON samples
-
-Files:
-
-- schemas/
-- fixtures/
+- stress test rapid consecutive sends
+- verify no client_id mismatch
+- document assumption or fix if invalid
 
 Acceptance:
+50 rapid sends reconcile correctly.
 
-- golden fixture test passes
-
-Depends on:
-none
+Priority: High
 
 ---
 
-## A-003 In-Memory Ring Buffer
-Status: [x]
+## E-002 Multi-buffer routing correctness
+Status: [ ]
 
 Implement:
-
-- append event
-- replay recent events
-- capacity 500
-
-Do NOT add persistence.
+- verify sends land in intended buffer
+- verify channel vs DM routing
 
 Acceptance:
+multi-buffer manual test passes.
 
-- unit tests pass
-
-Depends on:
-A-002
+Priority: High
 
 ---
 
-## A-004 Websocket Broadcast Hub
-Status: [x]
+## E-003 Event schema freeze (v1)
+Status: [ ]
 
 Implement:
-
-- client connect
-- broadcast
-- disconnect cleanup
+- review current emitted schemas
+- remove accidental drift
+- document message.created and dm.created as stable
 
 Acceptance:
+schema fixtures committed.
 
-two clients receive same event
-
-Depends on:
-A-003
+Priority: High
 
 ---
 
-## A-005 Fixture Replay Feed
-Status: [x]
+## E-004 Reconnect smoke test
+Status: [ ]
 
 Implement:
-
-make dev-feed
-
-Replay sample events into relay.
-
-Acceptance:
-
-browser receives fixture events.
-
-Depends on:
-A-004
-
----
-
-# Milestone B — Minimal Client
-
-Goal:
-
-read messages from browser.
-
----
-
-## B-001 Message Feed UI
-Status: [x]
-
-Implement:
-
-- websocket connect
-- render incoming events
-
-No styling work.
+- restart relay
+- refresh browser
+- verify D-001/D-002 behavior together
 
 Acceptance:
+reconnect flow works end-to-end.
 
-messages visible in browser.
-
-Depends on:
-A-005
+Priority: Medium
 
 ---
 
-## B-002 Send Message Input
-Status: [x]
+## E-005 Backlog MVP spike
+Status: [ ]
 
-Implement:
+Very small spike only:
+- fetch recent 20 messages on connect
 
-- text box
-- send_message command
+Timebox:
+1 session max.
 
-No slash command support.
+If scope grows, stop.
 
-Acceptance:
-
-command reaches relay.
-
-Depends on:
-B-001
+Priority: Medium
 
 ---
 
-# Milestone C — irssi Bridge
+# Deferred (Not Now)
 
-Goal:
-
-end-to-end real message flow.
-
----
-
-## C-001 Public/Private Signal Hooks
-Status: [x]
-
-Implement:
-
-- message public
-- message private
-
-Emit NDJSON.
-
-Acceptance:
-
-irssi event reaches relay.
-
-Depends on:
-A-002
-
----
-
-## C-002 Relay → Plugin Send Path
-Status: [x]
-
-Implement:
-
-send_message command bridge
-
-Acceptance:
-
-browser reply reaches irssi.
-
-Depends on:
-C-001
-B-002
-
----
-
-# Milestone D — Resilience
-
-Goal:
-
-survive reconnects.
-
----
-
-## D-001 Plugin Socket Reconnect
-Status: [x]
-
-Implement:
-
-- reconnect logic
-- small outbound queue
-
-Acceptance:
-
-relay restart does not require irssi restart
-
-Depends on:
-C-001
-
----
-
-## D-002 Browser Replay on Reconnect
-Status: [x]
-
-Implement:
-
-recent replay on reconnect.
-
-Acceptance:
-
-refresh restores recent events.
-
-Depends on:
-A-003
-B-001
-
----
-
-## D-003a Outbound Correlation ID Plumbing
-Status: [x]
-
-Implement:
-- client_id pass-through
-- own echo includes client_id
-
-Acceptance:
-identical client_id observed end-to-end
-
-Do not:
-- dedupe logic
-- text matching
-- UI work
-
----
-
-## D-003b Pending Send Reconciliation
-Status: [x]
-
-Depends on:
-D-003a
-
-Implement:
-- optimistic pending bubble
-- reconcile on matching client_id
-- prevent duplicate render
-
-Acceptance:
-sent message appears once
-
----
-
-## D-003c Pending Timeout Cleanup
-Status: [x]
-
-Depends on:
-D-003b
-
-Implement:
-- failed pending expiry
-
-Acceptance:
-stuck pending clears safely
-
----
-
-# Current Priority Queue
-
-1.
-A-002 Protocol Event Envelope
-
-2.
-A-003 Ring Buffer
-
-3.
-A-004 Websocket Hub
-
-4.
-A-005 Fixture Replay
-
-5.
-B-001 Message Feed UI
-
-Do these first.
-
----
-
-# Agent Task Execution Rules
-
-For each task:
-
-1. Implement only this task.
-2. Minimal patch.
-3. Add tests.
-4. Do not refactor unrelated code.
-5. Do not add new abstractions unless necessary.
-6. For deduplication tasks, do not use text-only matching unless explicitly required.
-   Prefer explicit identifiers and reconciliation.
-
----
-
-# Explicit Non-Tasks (Do Not Start)
-
-Not part of MVP:
-
-- authentication
-- push notifications
-- sqlite persistence
-- search
-- Telegram bridge
-- AI summarization
-- advanced inbox logic
-
-If you start these,
-you are off scope.
-
----
-
-# Nice-to-Have After MVP
-
-Only after all above complete:
-
-- sqlite storage
-- mention inbox
+- auth pairing
 - push
-- device trust auth
+- sqlite
+- search
+- mobile polish
 
-Ignore until MVP done.
+---
+
+## Patch Budget Rule
+
+Default task budget:
+~30 lines preferred
+>100 lines requires justification
