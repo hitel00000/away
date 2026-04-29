@@ -9,6 +9,51 @@
             margin: 20px;
         }
 
+        .layout {
+            display: grid;
+            grid-template-columns: 220px 1fr;
+            gap: 12px;
+            max-width: 980px;
+        }
+
+        #buffer-list {
+            border: 1px solid #ccc;
+            padding: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            min-height: 400px;
+        }
+
+        .buffer-item {
+            text-align: left;
+            padding: 6px 8px;
+            border: 1px solid #ddd;
+            background: #fff;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            font-family: monospace;
+        }
+
+        .buffer-item.active {
+            border-color: #0066cc;
+            background: #eaf3ff;
+        }
+
+        .unread-badge {
+            min-width: 16px;
+            height: 16px;
+            border-radius: 999px;
+            padding: 0 4px;
+            background: #dc3545;
+            color: #fff;
+            font-size: 11px;
+            line-height: 16px;
+            text-align: center;
+        }
+
         #messages {
             border: 1px solid #ccc;
             padding: 10px;
@@ -52,6 +97,11 @@
             color: #721c24;
         }
 
+        .active-row {
+            margin: 6px 0;
+            color: #333;
+        }
+
         #input-form {
             margin-top: 10px;
         }
@@ -72,113 +122,24 @@
 <body>
     <h1>Away - Message Feed</h1>
     <div id="status" class="status disconnected">Disconnected</div>
-    <div id="messages"></div>
+
+    <div class="layout">
+        <div id="buffer-list"></div>
+        <div>
+            <div class="active-row">Active: <strong id="active-title">(none)</strong></div>
+            <div id="messages"></div>
+        </div>
+    </div>
+
     <form id="input-form" onsubmit="sendMessage(event)">
-        <input id="target-field" type="text" placeholder="#target" value="#test" style="width: 15%; padding: 8px; font-family: monospace;">
-        <input id="input-field" type="text" placeholder="Type message..." autocomplete="off" style="width: 65%; padding: 8px; font-family: monospace;">
+        <input id="target-field" type="text" placeholder="#target" value="#test"
+            style="width: 15%; padding: 8px; font-family: monospace;">
+        <input id="input-field" type="text" placeholder="Type message..." autocomplete="off"
+            style="width: 65%; padding: 8px; font-family: monospace;">
         <button id="send-button" type="submit">Send</button>
     </form>
 
-    <script>
-        const proto = location.protocol === "https:" ? "wss" : "ws";
-        const ws = new WebSocket(`${proto}://${location.host}/ws`);
-        const messagesDiv = document.getElementById('messages');
-        const statusDiv = document.getElementById('status');
-        const inputField = document.getElementById('input-field');
-        const targetField = document.getElementById('target-field');
-        const sendButton = document.getElementById('send-button');
-
-        ws.onopen = () => {
-            statusDiv.textContent = 'Connected';
-            statusDiv.className = 'status connected';
-            inputField.disabled = false;
-            sendButton.disabled = false;
-        };
-
-        const PENDING_TIMEOUT_MS = 10000;
-        const pendingMessages = new Map();
-
-        function addMessage(msg, isPending = false) {
-            const el = document.createElement('div');
-            el.className = isPending ? 'message pending' : 'message';
-            const nick = msg.nick || 'me';
-            el.innerHTML = `<span class="nick">${nick}</span>: ${msg.text}`;
-            messagesDiv.appendChild(el);
-            messagesDiv.scrollTop = messagesDiv.scrollHeight;
-            return el;
-        }
-
-        ws.onmessage = (event) => {
-            try {
-                const ev = JSON.parse(event.data);
-                if (ev.type === 'message.created' || ev.type === 'dm.created') {
-                    const msg = ev.payload;
-                    const clientId = msg.client_id;
-
-                    if (clientId && pendingMessages.has(clientId)) {
-                        const { el, timeoutId } = pendingMessages.get(clientId);
-                        clearTimeout(timeoutId);
-                        el.className = 'message';
-                        pendingMessages.delete(clientId);
-                        // Update nick from server event
-                        el.querySelector('.nick').textContent = msg.nick || 'me';
-                        return;
-                    }
-
-                    addMessage(msg);
-                }
-            } catch (e) {
-                console.error('parse error', e);
-            }
-        };
-
-        ws.onclose = () => {
-            statusDiv.textContent = 'Disconnected';
-            statusDiv.className = 'status disconnected';
-            inputField.disabled = true;
-            sendButton.disabled = true;
-        };
-
-        ws.onerror = (error) => {
-            console.error('websocket error', error);
-        };
-
-        function sendMessage(event) {
-            event.preventDefault();
-            const text = inputField.value.trim();
-            const target = targetField.value.trim();
-            if (!text || !target) return;
-
-            const clientId = 'cl_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
-            const el = addMessage({ text, nick: 'me' }, true);
-
-            const timeoutId = setTimeout(() => {
-                if (pendingMessages.has(clientId)) {
-                    const { el } = pendingMessages.get(clientId);
-                    el.className = 'message unconfirmed';
-                    el.title = 'Send unconfirmed (timeout)';
-                    // NOTE: If a late ACK arrives after this timeout,
-                    // it will result in a duplicate message as the
-                    // pending entry has been cleared. (Accepted debt).
-                    pendingMessages.delete(clientId);
-                }
-            }, PENDING_TIMEOUT_MS);
-
-            pendingMessages.set(clientId, { el, timeoutId });
-
-            const command = {
-                type: 'send_message',
-                payload: { 
-                    text,
-                    client_id: clientId,
-                    target: target
-                }
-            };
-
-            ws.send(JSON.stringify(command));
-            inputField.value = '';
-        }
-    </script>
+    <script type="module" src="./app.js"></script>
 </body>
 
 </html>

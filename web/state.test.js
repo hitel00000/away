@@ -1,0 +1,122 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { createChatState } from "./state.js";
+
+function recv(st, target, nick = "alice", text = "hi", client_id = "") {
+  st.receiveMessage({ target, nick, text, client_id });
+}
+
+test("incoming message in inactive buffer increments unread", () => {
+  const st = createChatState();
+  st.activateTarget("#a");
+  recv(st, "#b", "alice");
+
+  const buffers = st.listBuffers();
+  const b = buffers.find((x) => x.id === "ch:#b");
+  assert.equal(b.unread, 1);
+});
+
+test("incoming message in active buffer does not increment unread", () => {
+  const st = createChatState();
+  st.activateTarget("#a");
+  recv(st, "#a", "alice");
+
+  const active = st.getActiveBuffer();
+  assert.equal(active.id, "ch:#a");
+  assert.equal(active.unread, 0);
+});
+
+test("switching into unread buffer marks read", () => {
+  const st = createChatState();
+  st.activateTarget("#a");
+  recv(st, "#b", "alice");
+  st.activateTarget("#b");
+
+  const active = st.getActiveBuffer();
+  assert.equal(active.id, "ch:#b");
+  assert.equal(active.unread, 0);
+});
+
+test("mark-read on activation affects only activated buffer", () => {
+  const st = createChatState();
+  st.activateTarget("#a");
+  recv(st, "#b", "alice");
+  recv(st, "bob", "bob");
+
+  const beforeB = st.listBuffers().find((x) => x.id === "ch:#b");
+  const beforeDM = st.listBuffers().find((x) => x.id === "dm:bob");
+  assert.equal(beforeB.unread, 1);
+  assert.equal(beforeDM.unread, 1);
+
+  st.activateTarget("#b");
+  const afterB = st.listBuffers().find((x) => x.id === "ch:#b");
+  const afterDM = st.listBuffers().find((x) => x.id === "dm:bob");
+  assert.equal(afterB.unread, 0);
+  assert.equal(afterDM.unread, 1);
+});
+
+test("channel and DM switching keeps state isolated", () => {
+  const st = createChatState();
+  st.activateTarget("#a");
+  recv(st, "bob", "bob");
+  recv(st, "#a", "alice");
+
+  const dm = st.listBuffers().find((x) => x.id === "dm:bob");
+  const ch = st.listBuffers().find((x) => x.id === "ch:#a");
+  assert.equal(dm.unread, 1);
+  assert.equal(ch.unread, 0);
+
+  st.activateTarget("bob");
+  assert.equal(st.getActiveBuffer().id, "dm:bob");
+  assert.equal(st.getActiveBuffer().unread, 0);
+});
+
+test("active buffer target label tracks current selection", () => {
+  const st = createChatState();
+  st.activateTarget("#a");
+  assert.equal(st.getActiveTarget(), "#a");
+  st.activateTarget("bob");
+  assert.equal(st.getActiveTarget(), "bob");
+});
+
+test("self-sent event never increments unread in same buffer", () => {
+  const st = createChatState();
+  st.activateTarget("#a");
+  st.markPendingSelf("cid-1", "#a");
+  recv(st, "#a", "someone-else", "mine", "cid-1");
+
+  const active = st.getActiveBuffer();
+  assert.equal(active.id, "ch:#a");
+  assert.equal(active.unread, 0);
+});
+
+test("self-sent event in inactive buffer does not create unread", () => {
+  const st = createChatState();
+  st.activateTarget("#a");
+  st.markPendingSelf("cid-2", "#b");
+  recv(st, "#b", "alice", "mine", "cid-2");
+
+  const b = st.listBuffers().find((x) => x.id === "ch:#b");
+  assert.equal(b.unread, 0);
+});
+
+test("non-self message with same nick does increment unread when inactive", () => {
+  const st = createChatState();
+  st.activateTarget("#a");
+  recv(st, "#b", "me", "not-correlated", "");
+
+  const b = st.listBuffers().find((x) => x.id === "ch:#b");
+  assert.equal(b.unread, 1);
+});
+
+test("pending self ACK must render only once", () => {
+  const st = createChatState();
+  st.activateTarget("#a");
+  st.markPendingSelf("cid-ack-1", "#a");
+  recv(st, "#a", "alice", "mine", "cid-ack-1");
+  recv(st, "#a", "alice", "mine", "cid-ack-1");
+
+  const active = st.getActiveBuffer();
+  assert.equal(active.messages.length, 1);
+  assert.equal(active.unread, 0);
+});
