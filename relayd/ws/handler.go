@@ -28,6 +28,12 @@ type SendMessagePayload struct {
 
 var irssiCommandFifo = "/tmp/away/irc-companion.cmd"
 
+func init() {
+	if val := os.Getenv("AWAY_IRC_FIFO"); val != "" {
+		irssiCommandFifo = val
+	}
+}
+
 // writeFifo writes a single NDJSON line to the irssi command FIFO.
 // O_NONBLOCK: if irssi is not reading, open returns ENXIO immediately
 // instead of blocking the WebSocket reader goroutine indefinitely.

@@ -64,14 +64,25 @@ func TestHubDisconnectedClientCleanup(t *testing.T) {
 	defer srv.Close()
 
 	c := mustDialWS(t, srv.URL)
-	if hub.ClientCount() != 1 {
+	
+	// Wait for registration
+	deadline := time.Now().Add(2 * time.Second)
+	registered := false
+	for time.Now().Before(deadline) {
+		if hub.ClientCount() == 1 {
+			registered = true
+			break
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if !registered {
 		t.Fatalf("expected one connected client, got %d", hub.ClientCount())
 	}
 	if err := c.Close(); err != nil {
 		t.Fatalf("close failed: %v", err)
 	}
 
-	deadline := time.Now().Add(2 * time.Second)
+	deadline = time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
 		if hub.ClientCount() == 0 {
 			return
@@ -108,12 +119,15 @@ func TestConcurrentReconnectDuplicate(t *testing.T) {
 
 			seen := make(map[string]int)
 			for j := 0; j < 10; j++ {
-				_, msg, err := conn.ReadMessage()
+				_, msgData, err := conn.ReadMessage()
 				if err != nil {
 					return
 				}
 				var ev relayd.Event
-				json.Unmarshal(msg, &ev)
+				if err := json.Unmarshal(msgData, &ev); err != nil {
+					t.Errorf("client %d: failed to unmarshal: %v", cid, err)
+					return
+				}
 				if seen[ev.ID] > 0 {
 					t.Errorf("client %d: duplicate event detected: %s", cid, ev.ID)
 				}

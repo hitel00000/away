@@ -17,7 +17,10 @@ func main() {
 	ring := relayd.NewEventRing()
 	hub := ws.NewHub(ring)
 
-	const ircSocket = "/tmp/away/irc-companion.sock"
+	ircSocket := "/tmp/away/irc-companion.sock"
+	if val := os.Getenv("AWAY_IRC_SOCKET"); val != "" {
+		ircSocket = val
+	}
 
 	_ = os.Remove(ircSocket)
 
