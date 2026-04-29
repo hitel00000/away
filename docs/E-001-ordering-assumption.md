@@ -43,23 +43,52 @@ Accepted debt: noted in D-001 docs. Fix is a proper line-buffer in
 
 ## Fix applied (this task)
 
-`handler.go` had `defer f.Close()` inside the WebSocket read loop.
-`defer` runs at function return, not at block end. Rapid sends left
-multiple FIFO fds open simultaneously, which could cause write
-interleaving on the FIFO.
+**1. defer-in-loop fd leak**
 
-Fixed: extracted `writeFifo()` helper that opens, writes, and closes
-the FIFO atomically per message. `defer` is now scoped inside the helper.
+`handler.go` had `defer f.Close()` inside the WebSocket read loop.
+`defer` runs at function return, not block end. Rapid sends left
+multiple FIFO fds open simultaneously, risking write interleaving.
+
+Fixed: extracted `writeFifo()` helper; defer is scoped inside the
+helper, so fd is released on each call return.
+
+**2. Blocking O_WRONLY open**
+
+`O_WRONLY` on a FIFO blocks until a reader is present. When irssi is
+absent this stalls the WebSocket reader goroutine indefinitely, freezing
+all message handling for that client.
+
+Fixed: `O_WRONLY|syscall.O_NONBLOCK`. If no reader is present, open
+returns `ENXIO` immediately. The error is logged; the WebSocket loop
+continues.
+
+**3. Error provenance**
+
+Failures are now wrapped: `fmt.Errorf("open: %w", err)` and
+`fmt.Errorf("write: %w", err)`. Log output identifies the failure site.
+
+## Remaining risk
+
+**FIFO partial-read (irssi plugin):**
+`sysread` reads ≤ 4096 bytes. A line straddling a read boundary is
+silently dropped → subsequent `shift @pending_ids` shifts the wrong id.
+Low likelihood for typical message sizes. Deferred.
+
+**No outbound queue in relay:**
+When irssi is absent, commands are dropped (ENXIO). The client's 10 s
+pending timeout surfaces the failure via the `unconfirmed` CSS class.
+Accepted for MVP scope.
 
 ## Stress test
 
 `tools/stress_send.sh [WS_URL] [N=50]`
 
 Requires `websocat`. Sends N messages with deterministic client_ids
-(`stress_001` … `stress_050`) and checks that the echoed events return
-them in the same order.
+(`stress_001` … `stress_050`) and checks that echoed events return them
+in send order.
 
 ## Conclusion
 
 The ordering assumption is **valid** under normal conditions.
-The FIFO partial-read risk is documented but not yet mitigated.
+The relay no longer blocks on irssi absence.
+Partial-read and command-drop risks are documented; not yet mitigated.

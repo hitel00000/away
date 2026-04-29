@@ -2,9 +2,11 @@ package ws
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"syscall"
 
 	"github.com/gorilla/websocket"
 )
@@ -27,15 +29,18 @@ type SendMessagePayload struct {
 const irssiCommandFifo = "/tmp/away/irc-companion.cmd"
 
 // writeFifo writes a single NDJSON line to the irssi command FIFO.
-// Opens and closes the file per call to avoid fd leaks inside the read loop.
+// O_NONBLOCK: if irssi is not reading, open returns ENXIO immediately
+// instead of blocking the WebSocket reader goroutine indefinitely.
 func writeFifo(line []byte) error {
-	f, err := os.OpenFile(irssiCommandFifo, os.O_WRONLY, 0600)
+	f, err := os.OpenFile(irssiCommandFifo, os.O_WRONLY|syscall.O_NONBLOCK, 0600)
 	if err != nil {
-		return err
+		return fmt.Errorf("open: %w", err)
 	}
 	defer f.Close()
-	_, err = f.Write(append(line, '\n'))
-	return err
+	if _, err = f.Write(append(line, '\n')); err != nil {
+		return fmt.Errorf("write: %w", err)
+	}
+	return nil
 }
 
 func Handler(hub *Hub) http.Handler {
@@ -81,7 +86,7 @@ func Handler(hub *Hub) http.Handler {
 				}
 
 				if err := writeFifo(line); err != nil {
-					log.Printf("fifo write failed: %v", err)
+					log.Printf("fifo: %v", err)
 				}
 
 			}
