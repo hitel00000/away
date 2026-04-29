@@ -218,7 +218,7 @@ survive reconnects.
 ---
 
 ## D-001 Plugin Socket Reconnect
-Status: [ ]
+Status: [x]
 
 Implement:
 

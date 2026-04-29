@@ -26,6 +26,15 @@ my $CMD_FIFO     = "/tmp/away/irc-companion.cmd";
 
 my $cmd_fh;
 
+# -------------------------
+# outbound transport state
+# -------------------------
+
+our @outbound_queue = ();
+our $MAX_QUEUE      = 100;
+our $event_sock;
+
+
 #
 # -------------------------
 # utility
@@ -64,21 +73,55 @@ sub json_escape {
 # -------------------------
 #
 
+sub flush_queue {
+
+  return 1 unless @outbound_queue;
+
+  # Try to connect if not connected
+  unless ($event_sock) {
+      $event_sock = IO::Socket::UNIX->new(
+          Type    => SOCK_STREAM,
+          Peer    => $EVENT_SOCKET,
+          Timeout => 1,
+      );
+      if ($event_sock) {
+          $event_sock->autoflush(1);
+      }
+  }
+
+  unless ($event_sock) {
+      return 1;
+  }
+
+  while (@outbound_queue) {
+      my $line = $outbound_queue[0];
+
+      # NOTE: We assume short NDJSON lines.
+      # On UNIX sockets, writes smaller than PIPE_BUF (usually 4KB+) are typically atomic.
+      # Partial writes are not explicitly handled here to keep it minimal.
+      # SIGPIPE is generally handled/ignored by the irssi environment.
+      if (print $event_sock $line . "\n") {
+          shift @outbound_queue;
+      } else {
+          # Write failure: relay socket probably closed or broken
+          $event_sock->close();
+          undef $event_sock;
+          last;
+      }
+  }
+
+  return 1;
+}
+
 sub emit_json {
   my ($line)=@_;
 
-  my $sock = IO::Socket::UNIX->new(
-      Type => SOCK_STREAM,
-      Peer => $EVENT_SOCKET
-  );
-
-  unless ($sock) {
-      Irssi::print("away_bridge: relay socket unavailable");
-      return;
+  push @outbound_queue, $line;
+  if (scalar @outbound_queue > $MAX_QUEUE) {
+      shift @outbound_queue;
   }
 
-  print $sock $line . "\n";
-  close($sock);
+  flush_queue();
 }
 
 #
@@ -173,6 +216,8 @@ sub init_command_fifo {
   Irssi::print("away_bridge command fifo ready");
 }
 
+# NOTE: We use regex for parsing instead of JSON::PP because some irssi
+# installations run on very old Perl versions where JSON::PP is not available.
 sub parse_send_message {
 
   my ($line)=@_;
@@ -215,7 +260,7 @@ sub poll_commands {
       next unless @servers;
   
       $servers[0]->command(
-         "msg $target $text"
+          "msg $target $text"
       );
   }
 
@@ -253,6 +298,12 @@ init_command_fifo();
 Irssi::timeout_add(
   250,
   'poll_commands',
+  undef
+);
+
+Irssi::timeout_add(
+  5000,
+  'flush_queue',
   undef
 );
 
