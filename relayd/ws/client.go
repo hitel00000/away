@@ -8,12 +8,19 @@ import (
 
 type Client struct {
 	conn   *websocket.Conn
+	send   chan []byte
 	mu     sync.Mutex
 	closed bool
+	once   sync.Once
 }
 
 func NewClient(conn *websocket.Conn) *Client {
-	return &Client{conn: conn}
+	c := &Client{
+		conn: conn,
+		send: make(chan []byte, 256), // Buffer for backpressure
+	}
+	go c.writePump()
+	return c
 }
 
 func (c *Client) Send(payload []byte) error {
@@ -22,16 +29,34 @@ func (c *Client) Send(payload []byte) error {
 	if c.closed {
 		return websocket.ErrCloseSent
 	}
-	return c.conn.WriteMessage(websocket.TextMessage, payload)
+
+	select {
+	case c.send <- payload:
+		return nil
+	default:
+		// Slow consumer: drop connection
+		c.mu.Unlock()
+		c.Close()
+		c.mu.Lock()
+		return websocket.ErrCloseSent
+	}
+}
+
+func (c *Client) writePump() {
+	for payload := range c.send {
+		if err := c.conn.WriteMessage(websocket.TextMessage, payload); err != nil {
+			break
+		}
+	}
+	c.Close()
 }
 
 func (c *Client) Close() {
-	c.mu.Lock()
-	if c.closed {
+	c.once.Do(func() {
+		c.mu.Lock()
+		c.closed = true
 		c.mu.Unlock()
-		return
-	}
-	c.closed = true
-	c.mu.Unlock()
-	_ = c.conn.Close()
+		close(c.send)
+		_ = c.conn.Close()
+	})
 }

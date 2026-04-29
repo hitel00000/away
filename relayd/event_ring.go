@@ -1,8 +1,11 @@
 package relayd
 
+import "sync"
+
 const eventRingSize = 500
 
 type EventRing struct {
+	mu     sync.RWMutex
 	events []Event
 	start  int
 	count  int
@@ -15,6 +18,9 @@ func NewEventRing() *EventRing {
 }
 
 func (r *EventRing) Append(ev Event) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+
 	if r.count < len(r.events) {
 		idx := (r.start + r.count) % len(r.events)
 		r.events[idx] = ev
@@ -27,6 +33,9 @@ func (r *EventRing) Append(ev Event) {
 }
 
 func (r *EventRing) ReplayRecent(limit int) []Event {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+
 	if limit <= 0 || r.count == 0 {
 		return nil
 	}

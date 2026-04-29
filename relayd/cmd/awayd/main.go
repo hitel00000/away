@@ -14,8 +14,8 @@ import (
 )
 
 func main() {
-	hub := ws.NewHub()
 	ring := relayd.NewEventRing()
+	hub := ws.NewHub(ring)
 
 	const ircSocket = "/tmp/away/irc-companion.sock"
 
@@ -54,8 +54,6 @@ func main() {
 						continue
 					}
 
-					ring.Append(ev)
-
 					if err := hub.BroadcastEvent(ev); err != nil {
 						log.Printf(
 							"broadcast failed: %v",
@@ -93,7 +91,6 @@ func main() {
 			return
 		}
 
-		ring.Append(ev)
 		if err := hub.BroadcastEvent(ev); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return

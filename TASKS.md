@@ -235,7 +235,7 @@ C-001
 ---
 
 ## D-002 Browser Replay on Reconnect
-Status: [ ]
+Status: [x]
 
 Implement:
 

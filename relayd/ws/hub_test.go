@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -12,7 +13,7 @@ import (
 )
 
 func TestHubBroadcastToTwoClients(t *testing.T) {
-	hub := NewHub()
+	hub := NewHub(relayd.NewEventRing())
 	srv := httptest.NewServer(Handler(hub))
 	defer srv.Close()
 
@@ -21,7 +22,7 @@ func TestHubBroadcastToTwoClients(t *testing.T) {
 	c2 := mustDialWS(t, srv.URL)
 	defer c2.Close()
 
-	event := relayd.Event{Type: "message.created", Version: "1", ID: "evt-1", Timestamp: time.Now().UTC()}
+	event := relayd.Event{Type: "message.created", Version: 1, ID: "evt-1", Timestamp: time.Now().UTC()}
 	if err := hub.BroadcastEvent(event); err != nil {
 		t.Fatalf("broadcast failed: %v", err)
 	}
@@ -33,8 +34,32 @@ func TestHubBroadcastToTwoClients(t *testing.T) {
 	}
 }
 
+func TestHandlerReplaysRecentEvents(t *testing.T) {
+	ring := relayd.NewEventRing()
+	// Pre-fill ring buffer
+	e1 := relayd.Event{Type: "message.created", Version: 1, ID: "evt-1"}
+	e2 := relayd.Event{Type: "message.created", Version: 1, ID: "evt-2"}
+	ring.Append(e1)
+	ring.Append(e2)
+
+	hub := NewHub(ring)
+	srv := httptest.NewServer(Handler(hub))
+	defer srv.Close()
+
+	c := mustDialWS(t, srv.URL)
+	defer c.Close()
+
+	// Client should receive e1 and e2
+	g1 := mustReadEvent(t, c)
+	g2 := mustReadEvent(t, c)
+
+	if g1.ID != e1.ID || g2.ID != e2.ID {
+		t.Fatalf("expected e1 and e2, got %q and %q", g1.ID, g2.ID)
+	}
+}
+
 func TestHubDisconnectedClientCleanup(t *testing.T) {
-	hub := NewHub()
+	hub := NewHub(relayd.NewEventRing())
 	srv := httptest.NewServer(Handler(hub))
 	defer srv.Close()
 
@@ -54,6 +79,60 @@ func TestHubDisconnectedClientCleanup(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	t.Fatalf("expected disconnected client to be removed, got %d clients", hub.ClientCount())
+}
+
+func TestConcurrentReconnectDuplicate(t *testing.T) {
+	ring := relayd.NewEventRing()
+	hub := NewHub(ring)
+	srv := httptest.NewServer(Handler(hub))
+	defer srv.Close()
+
+	const clientCount = 10
+	const eventCount = 50
+
+	var wg sync.WaitGroup
+	wg.Add(clientCount)
+
+	for i := 0; i < clientCount; i++ {
+		go func(cid int) {
+			defer wg.Done()
+			// Random delay to stagger connections
+			time.Sleep(time.Duration(cid*5) * time.Millisecond)
+
+			conn, _, err := websocket.DefaultDialer.Dial("ws"+strings.TrimPrefix(srv.URL, "http")+"/ws", nil)
+			if err != nil {
+				t.Errorf("dial failed: %v", err)
+				return
+			}
+			defer conn.Close()
+
+			seen := make(map[string]int)
+			for j := 0; j < 10; j++ {
+				_, msg, err := conn.ReadMessage()
+				if err != nil {
+					return
+				}
+				var ev relayd.Event
+				json.Unmarshal(msg, &ev)
+				if seen[ev.ID] > 0 {
+					t.Errorf("client %d: duplicate event detected: %s", cid, ev.ID)
+				}
+				seen[ev.ID]++
+			}
+		}(i)
+	}
+
+	for i := 0; i < eventCount; i++ {
+		ev := relayd.Event{
+			Type:    "message.created",
+			Version: 1,
+			ID:      "evt-" + strings.Repeat("x", i), // Unique ID
+		}
+		hub.BroadcastEvent(ev)
+		time.Sleep(2 * time.Millisecond)
+	}
+
+	wg.Wait()
 }
 
 func mustDialWS(t *testing.T, serverURL string) *websocket.Conn {

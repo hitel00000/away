@@ -42,8 +42,8 @@ func TestParseFixtureEvents(t *testing.T) {
     if ev.Type != "message.created" {
         t.Fatalf("expected type message.created, got %q", ev.Type)
     }
-    if ev.Version != "1" {
-        t.Fatalf("expected version 1, got %q", ev.Version)
+    if ev.Version != 1 {
+        t.Fatalf("expected version 1, got %d", ev.Version)
     }
     if ev.ID != "evt-1" {
         t.Fatalf("expected id evt-1, got %q", ev.ID)
