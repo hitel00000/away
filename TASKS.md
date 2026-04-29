@@ -106,7 +106,7 @@ Priority: Medium
 ---
 
 ## E-005 Backlog MVP spike
-Status: [ ]
+Status: [x]
 
 Very small spike only:
 - fetch recent 20 messages on connect

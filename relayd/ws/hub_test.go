@@ -58,6 +58,37 @@ func TestHandlerReplaysRecentEvents(t *testing.T) {
 	}
 }
 
+func TestHandlerReplaysLast20Events(t *testing.T) {
+	ring := relayd.NewEventRing()
+	for i := 0; i < 25; i++ {
+		ring.Append(relayd.Event{
+			Type:    "message.created",
+			Version: 1,
+			ID:      "evt-" + strings.Repeat("x", i+1),
+		})
+	}
+
+	hub := NewHub(ring)
+	srv := httptest.NewServer(Handler(hub))
+	defer srv.Close()
+
+	c := mustDialWS(t, srv.URL)
+	defer c.Close()
+
+	for i := 0; i < 20; i++ {
+		ev := mustReadEvent(t, c)
+		want := "evt-" + strings.Repeat("x", i+6)
+		if ev.ID != want {
+			t.Fatalf("replay[%d]: want %q, got %q", i, want, ev.ID)
+		}
+	}
+
+	_ = c.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
+	if _, _, err := c.ReadMessage(); err == nil {
+		t.Fatalf("expected only 20 replayed events, but received more")
+	}
+}
+
 func TestHubDisconnectedClientCleanup(t *testing.T) {
 	hub := NewHub(relayd.NewEventRing())
 	srv := httptest.NewServer(Handler(hub))

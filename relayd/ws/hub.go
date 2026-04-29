@@ -7,7 +7,7 @@ import (
 	"away/relayd"
 )
 
-const replayLimit = 50
+const replayLimit = 20
 
 type Hub struct {
 	mu      sync.Mutex
