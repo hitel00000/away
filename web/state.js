@@ -6,6 +6,7 @@ export function createChatState() {
   const pendingSelfMessageByClientID = new Map();
   const consumedSelfAckClientIDs = new Set();
   const seenHighlightKeys = new Set();
+  const seenMessageEventIDs = new Set();
   let activeBufferID = null;
 
   function ensureBuffer(bufferID, type, label) {
@@ -128,6 +129,16 @@ export function createChatState() {
   }
 
   function receiveMessage(msg) {
+    const eventID = String((msg && msg.event_id) || "").trim();
+    if (eventID && seenMessageEventIDs.has(eventID)) {
+      return {
+        bufferID: "",
+        isSelf: false,
+        unread: 0,
+        active: false,
+      };
+    }
+
     const clientID = msg && msg.client_id;
     const fromPending = clientID && pendingSelfClientIDs.has(clientID);
     if (fromPending && consumedSelfAckClientIDs.has(clientID)) {
@@ -172,6 +183,9 @@ export function createChatState() {
       pendingSelfClientIDs.delete(clientID);
       pendingSelfMessageByClientID.delete(clientID);
       consumedSelfAckClientIDs.add(clientID);
+    }
+    if (eventID) {
+      seenMessageEventIDs.add(eventID);
     }
 
     return {

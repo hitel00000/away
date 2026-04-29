@@ -49,7 +49,7 @@ type relayServer struct {
 	cleanup func()
 }
 
-func startRelay(t *testing.T, exePath string, socketPath, fifoPath string) *relayServer {
+func startRelay(t *testing.T, exePath string, socketPath, fifoPath, journalPath string) *relayServer {
 	t.Helper()
 
 	cmd := exec.Command(exePath)
@@ -57,6 +57,7 @@ func startRelay(t *testing.T, exePath string, socketPath, fifoPath string) *rela
 	cmd.Env = append(os.Environ(),
 		"AWAY_IRC_SOCKET="+socketPath,
 		"AWAY_IRC_FIFO="+fifoPath,
+		"AWAY_EVENT_JOURNAL="+journalPath,
 	)
 	outBuf := new(bytes.Buffer)
 	cmd.Stdout = outBuf
@@ -112,7 +113,7 @@ func waitCondition(t *testing.T, timeout time.Duration, condition func() bool) {
 func readReplayedEvents(t *testing.T, conn *websocket.Conn) []map[string]interface{} {
 	t.Helper()
 	var events []map[string]interface{}
-	// Replayed events should arrive almost immediately. 
+	// Replayed events should arrive almost immediately.
 	// We read until a small timeout occurs.
 	for {
 		conn.SetReadDeadline(time.Now().Add(200 * time.Millisecond))
@@ -130,8 +131,9 @@ func TestE2E_Reconnect_Replay(t *testing.T) {
 	tmpDir := t.TempDir()
 	socketPath := filepath.Join(tmpDir, "irc.sock")
 	fifoPath := filepath.Join(tmpDir, "irc.fifo")
+	journalPath := filepath.Join(tmpDir, "events.ndjson")
 
-	server := startRelay(t, exePath, socketPath, fifoPath)
+	server := startRelay(t, exePath, socketPath, fifoPath, journalPath)
 	defer server.cleanup()
 
 	// 1. IRSSI sends a message before any client connects
@@ -191,10 +193,11 @@ func TestE2E_Reconnect_RelayRestart(t *testing.T) {
 	tmpDir := t.TempDir()
 	socketPath := filepath.Join(tmpDir, "irc.sock")
 	fifoPath := filepath.Join(tmpDir, "irc.fifo")
+	journalPath := filepath.Join(tmpDir, "events.ndjson")
 
 	// Start server 1
-	server1 := startRelay(t, exePath, socketPath, fifoPath)
-	
+	server1 := startRelay(t, exePath, socketPath, fifoPath, journalPath)
+
 	// IRSSI sends msg1
 	ircConn, err := net.Dial("unix", socketPath)
 	if err != nil {
@@ -206,8 +209,8 @@ func TestE2E_Reconnect_RelayRestart(t *testing.T) {
 
 	// Restart server
 	server1.cleanup()
-	
-	server2 := startRelay(t, exePath, socketPath, fifoPath)
+
+	server2 := startRelay(t, exePath, socketPath, fifoPath, journalPath)
 	defer server2.cleanup()
 
 	// IRSSI reconnects and sends msg2
@@ -228,16 +231,20 @@ func TestE2E_Reconnect_RelayRestart(t *testing.T) {
 	}
 	defer conn.Close()
 
-	// Snapshot/Replay should contain msg2
+	// Snapshot/Replay should contain both msg1 (journal restore) and msg2.
 	replayed := readReplayedEvents(t, conn)
+	found1 := false
 	found2 := false
 	for _, ev := range replayed {
 		if ev["id"] == "evt-2" {
 			found2 = true
 		}
 		if ev["id"] == "evt-1" {
-			t.Errorf("did not expect msg1 after restart (no persistence yet)")
+			found1 = true
 		}
+	}
+	if !found1 {
+		t.Errorf("expected msg1 in replay after restart")
 	}
 	if !found2 {
 		t.Errorf("expected msg2 in replay after restart")

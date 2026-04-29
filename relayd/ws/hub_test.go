@@ -3,6 +3,8 @@ package ws
 import (
 	"encoding/json"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -13,7 +15,7 @@ import (
 )
 
 func TestHubBroadcastToTwoClients(t *testing.T) {
-	hub := NewHub(relayd.NewEventRing())
+	hub := NewHub(relayd.NewEventRing(), nil)
 	srv := httptest.NewServer(Handler(hub))
 	defer srv.Close()
 
@@ -34,6 +36,31 @@ func TestHubBroadcastToTwoClients(t *testing.T) {
 	}
 }
 
+func TestHubBroadcastContinuesWhenJournalFails(t *testing.T) {
+	badPath := filepath.Join(t.TempDir(), "journal-dir")
+	if err := os.MkdirAll(badPath, 0755); err != nil {
+		t.Fatalf("mkdir failed: %v", err)
+	}
+	journal := relayd.NewEventJournal(badPath, 10)
+
+	hub := NewHub(relayd.NewEventRing(), journal)
+	srv := httptest.NewServer(Handler(hub))
+	defer srv.Close()
+
+	c := mustDialWS(t, srv.URL)
+	defer c.Close()
+
+	event := relayd.Event{Type: "message.created", Version: 1, ID: "evt-journal-fail"}
+	if err := hub.BroadcastEvent(event); err != nil {
+		t.Fatalf("broadcast failed: %v", err)
+	}
+
+	got := mustReadEvent(t, c)
+	if got.ID != event.ID {
+		t.Fatalf("expected %q, got %q", event.ID, got.ID)
+	}
+}
+
 func TestHandlerReplaysRecentEvents(t *testing.T) {
 	ring := relayd.NewEventRing()
 	// Pre-fill ring buffer
@@ -42,7 +69,7 @@ func TestHandlerReplaysRecentEvents(t *testing.T) {
 	ring.Append(e1)
 	ring.Append(e2)
 
-	hub := NewHub(ring)
+	hub := NewHub(ring, nil)
 	srv := httptest.NewServer(Handler(hub))
 	defer srv.Close()
 
@@ -68,7 +95,7 @@ func TestHandlerReplaysLast20Events(t *testing.T) {
 		})
 	}
 
-	hub := NewHub(ring)
+	hub := NewHub(ring, nil)
 	srv := httptest.NewServer(Handler(hub))
 	defer srv.Close()
 
@@ -90,12 +117,12 @@ func TestHandlerReplaysLast20Events(t *testing.T) {
 }
 
 func TestHubDisconnectedClientCleanup(t *testing.T) {
-	hub := NewHub(relayd.NewEventRing())
+	hub := NewHub(relayd.NewEventRing(), nil)
 	srv := httptest.NewServer(Handler(hub))
 	defer srv.Close()
 
 	c := mustDialWS(t, srv.URL)
-	
+
 	// Wait for registration
 	deadline := time.Now().Add(2 * time.Second)
 	registered := false
@@ -125,7 +152,7 @@ func TestHubDisconnectedClientCleanup(t *testing.T) {
 
 func TestConcurrentReconnectDuplicate(t *testing.T) {
 	ring := relayd.NewEventRing()
-	hub := NewHub(ring)
+	hub := NewHub(ring, nil)
 	srv := httptest.NewServer(Handler(hub))
 	defer srv.Close()
 
@@ -181,7 +208,7 @@ func TestConcurrentReconnectDuplicate(t *testing.T) {
 }
 
 func TestHubPreservesClientID(t *testing.T) {
-	hub := NewHub(relayd.NewEventRing())
+	hub := NewHub(relayd.NewEventRing(), nil)
 	srv := httptest.NewServer(Handler(hub))
 	defer srv.Close()
 
@@ -214,7 +241,7 @@ func TestHubPreservesClientID(t *testing.T) {
 }
 
 func TestIdenticalMessagesWithDifferentClientIDs(t *testing.T) {
-	hub := NewHub(relayd.NewEventRing())
+	hub := NewHub(relayd.NewEventRing(), nil)
 	srv := httptest.NewServer(Handler(hub))
 	defer srv.Close()
 

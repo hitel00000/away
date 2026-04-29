@@ -2,6 +2,7 @@ package ws
 
 import (
 	"encoding/json"
+	"log"
 	"sync"
 
 	"away/relayd"
@@ -13,12 +14,14 @@ type Hub struct {
 	mu      sync.Mutex
 	clients map[*Client]struct{}
 	ring    *relayd.EventRing
+	journal *relayd.EventJournal
 }
 
-func NewHub(ring *relayd.EventRing) *Hub {
+func NewHub(ring *relayd.EventRing, journal *relayd.EventJournal) *Hub {
 	return &Hub{
 		clients: make(map[*Client]struct{}),
 		ring:    ring,
+		journal: journal,
 	}
 }
 
@@ -61,6 +64,12 @@ func (h *Hub) BroadcastEvent(ev relayd.Event) error {
 		clients = append(clients, c)
 	}
 	h.mu.Unlock()
+
+	if h.journal != nil {
+		if err := h.journal.Append(ev); err != nil {
+			log.Printf("journal append failed: %v", err)
+		}
+	}
 
 	for _, c := range clients {
 		if err := c.Send(payload); err != nil {

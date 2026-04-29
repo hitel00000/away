@@ -103,7 +103,7 @@ ws.onmessage = (event) => {
   try {
     const ev = JSON.parse(event.data);
     if (ev.type === "message.created" || ev.type === "dm.created") {
-      const msg = ev.payload;
+      const msg = { ...(ev.payload || {}), event_id: ev.id || "" };
       const clientId = msg.client_id;
       if (clientId && pendingMessageTimeouts.has(clientId)) {
         clearTimeout(pendingMessageTimeouts.get(clientId));

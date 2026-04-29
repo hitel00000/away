@@ -246,6 +246,18 @@ test("duplicate ACK does not duplicate or corrupt state", () => {
   assert.equal(active.messages[0].delivery_state, "sent");
 });
 
+test("duplicate replayed event_id does not inflate unread", () => {
+  const st = createChatState();
+  st.activateTarget("#a");
+
+  st.receiveMessage({ target: "#b", nick: "alice", text: "hi", event_id: "evt-r-1" });
+  st.receiveMessage({ target: "#b", nick: "alice", text: "hi", event_id: "evt-r-1" });
+
+  const b = st.listBuffers().find((x) => x.id === "ch:#b");
+  assert.equal(b.unread, 1);
+  assert.equal(b.messages.length, 1);
+});
+
 test("unrelated ACK does not mutate wrong pending", () => {
   const st = createChatState();
   st.activateTarget("#a");

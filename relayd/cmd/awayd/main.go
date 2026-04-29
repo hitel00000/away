@@ -11,11 +11,31 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strconv"
 )
 
 func main() {
 	ring := relayd.NewEventRing()
-	hub := ws.NewHub(ring)
+	journalPath := "/tmp/away/events.ndjson"
+	if val := os.Getenv("AWAY_EVENT_JOURNAL"); val != "" {
+		journalPath = val
+	}
+	journalMax := 500
+	if val := os.Getenv("AWAY_EVENT_JOURNAL_MAX"); val != "" {
+		if n, err := strconv.Atoi(val); err == nil && n > 0 {
+			journalMax = n
+		}
+	}
+	journal := relayd.NewEventJournal(journalPath, journalMax)
+	if recent, err := journal.LoadRecent(); err != nil {
+		log.Printf("journal restore failed: %v", err)
+	} else {
+		for _, ev := range recent {
+			ring.Append(ev)
+		}
+	}
+
+	hub := ws.NewHub(ring, journal)
 
 	ircSocket := "/tmp/away/irc-companion.sock"
 	if val := os.Getenv("AWAY_IRC_SOCKET"); val != "" {

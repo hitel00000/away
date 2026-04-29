@@ -114,7 +114,7 @@ func setupRoutingTest(t *testing.T) (conn *websocket.Conn, fifoLines <-chan stri
 
 	ch := make(chan string, 20)
 
-	hub := NewHub(relayd.NewEventRing())
+	hub := NewHub(relayd.NewEventRing(), nil)
 	srv := httptest.NewServer(Handler(hub))
 
 	wsURL := "ws" + strings.TrimPrefix(srv.URL, "http") + "/ws"
