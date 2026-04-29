@@ -26,6 +26,18 @@ type SendMessagePayload struct {
 
 const irssiCommandFifo = "/tmp/away/irc-companion.cmd"
 
+// writeFifo writes a single NDJSON line to the irssi command FIFO.
+// Opens and closes the file per call to avoid fd leaks inside the read loop.
+func writeFifo(line []byte) error {
+	f, err := os.OpenFile(irssiCommandFifo, os.O_WRONLY, 0600)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = f.Write(append(line, '\n'))
+	return err
+}
+
 func Handler(hub *Hub) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		conn, err := defaultUpgrader.Upgrade(w, r, nil)
@@ -68,31 +80,8 @@ func Handler(hub *Hub) http.Handler {
 					return
 				}
 
-				f, err := os.OpenFile(
-					irssiCommandFifo,
-					os.O_WRONLY,
-					0600,
-				)
-
-				if err != nil {
-					log.Printf(
-						"fifo open failed: %v",
-						err,
-					)
-					return
-				}
-
-				defer f.Close()
-
-				_, err = f.Write(
-					append(line, '\n'),
-				)
-
-				if err != nil {
-					log.Printf(
-						"fifo write failed: %v",
-						err,
-					)
+				if err := writeFifo(line); err != nil {
+					log.Printf("fifo write failed: %v", err)
 				}
 
 			}

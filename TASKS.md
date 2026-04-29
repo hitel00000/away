@@ -43,7 +43,7 @@ Goal:
 Validate assumptions and remove highest-risk defects.
 
 ## E-001 Verify own-message ordering assumption
-Status: [ ]
+Status: [x]
 
 Problem:
 D-003a assumes send order == irssi own echo order.
