@@ -285,7 +285,7 @@ sent message appears once
 ---
 
 ## D-003c Pending Timeout Cleanup
-Status: [ ]
+Status: [x]
 
 Depends on:
 D-003b

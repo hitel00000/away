@@ -27,6 +27,11 @@
             border-left-style: dashed;
         }
 
+        .message.failed {
+            border-left-color: #dc3545;
+            color: #721c24;
+        }
+
         .nick {
             font-weight: bold;
         }
@@ -110,7 +115,8 @@
                     const clientId = msg.client_id;
 
                     if (clientId && pendingMessages.has(clientId)) {
-                        const el = pendingMessages.get(clientId);
+                        const { el, timeoutId } = pendingMessages.get(clientId);
+                        clearTimeout(timeoutId);
                         el.className = 'message';
                         pendingMessages.delete(clientId);
                         // Update nick from server event
@@ -144,7 +150,17 @@
 
             const clientId = 'cl_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
             const el = addMessage({ text, nick: 'me' }, true);
-            pendingMessages.set(clientId, el);
+
+            const timeoutId = setTimeout(() => {
+                if (pendingMessages.has(clientId)) {
+                    const { el } = pendingMessages.get(clientId);
+                    el.className = 'message failed';
+                    el.title = 'Send timed out';
+                    pendingMessages.delete(clientId);
+                }
+            }, 10000);
+
+            pendingMessages.set(clientId, { el, timeoutId });
 
             const command = {
                 type: 'send_message',
