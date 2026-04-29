@@ -26,7 +26,7 @@ type SendMessagePayload struct {
 	Target   string `json:"target"`
 }
 
-const irssiCommandFifo = "/tmp/away/irc-companion.cmd"
+var irssiCommandFifo = "/tmp/away/irc-companion.cmd"
 
 // writeFifo writes a single NDJSON line to the irssi command FIFO.
 // O_NONBLOCK: if irssi is not reading, open returns ENXIO immediately

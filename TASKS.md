@@ -61,7 +61,7 @@ Priority: High
 ---
 
 ## E-002 Multi-buffer routing correctness
-Status: [ ]
+Status: [x]
 
 Implement:
 - verify sends land in intended buffer
