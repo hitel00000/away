@@ -41,6 +41,9 @@ export function createChatState() {
     if (bufferID.startsWith("ch:")) {
       return { id: bufferID, type: "channel", label: bufferID.slice(3) };
     }
+    if (bufferID.startsWith("chan:")) {
+      return { id: `ch:${bufferID.slice(5)}`, type: "channel", label: bufferID.slice(5) };
+    }
     if (bufferID.startsWith("dm:")) {
       return { id: bufferID, type: "dm", label: bufferID.slice(3) };
     }

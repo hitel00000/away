@@ -20,6 +20,22 @@ test("incoming message in inactive buffer increments unread", () => {
   assert.equal(b.unread, 1);
 });
 
+test("message.created with chan: buffer_id maps to channel buffer", () => {
+  const st = createChatState();
+  st.activateTarget("#a");
+  st.receiveMessage({
+    buffer_id: "chan:#b",
+    nick: "alice",
+    text: "hello",
+  });
+
+  const channel = st.listBuffers().find((x) => x.id === "ch:#b");
+  const dm = st.listBuffers().find((x) => x.id === "dm:alice");
+  assert.ok(channel);
+  assert.equal(channel.unread, 1);
+  assert.equal(dm, undefined);
+});
+
 test("incoming message in active buffer does not increment unread", () => {
   const st = createChatState();
   st.activateTarget("#a");
