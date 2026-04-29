@@ -1,27 +1,53 @@
 # NOW.md
 
-Current focus:
-MVP hardening, not new features.
+Current Focus
 
-This week objective:
-Validate correctness assumptions.
+Phase 0.2 usability pass.
 
-Current task:
-E-001 Verify own-message ordering assumption
+Do these only:
 
-Definition of done:
-- rapid-send stress test passes
-- ordering assumption documented
-- if invalid, propose minimal fix
+---
 
-After E-001:
-E-002 multi-buffer routing
+## 1. F-001 Buffer / Unread Correctness
+Current priority.
 
-Do NOT start:
+Focus:
+- correctness over UI polish
+- verify active buffer behavior
+- verify unread accounting
+
+Deliver:
+minimal patch + tests
+
+---
+
+## 2. F-002 Mention Inbox MVP
+Next.
+
+Focus:
+- synthetic mentions buffer only
+- minimal useful inbox
+- no advanced inbox features
+
+Deliver:
+minimal patch + tests
+
+---
+
+## 3. F-003 Send Acknowledgement
+Then.
+
+Focus:
+- pending vs sent feedback only
+
+Stop after this and reassess roadmap.
+
+---
+
+Do Not Start
+
 - auth
-- persistence
 - push
-- redesign work
-
-Current engineering mode:
-stabilize, not expand.
+- sqlite
+- search (unless explicitly reprioritized)
+- mobile polish rabbit holes

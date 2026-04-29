@@ -1,137 +1,205 @@
 # TASKS.md
 
-Away MVP backlog (post D-003)
+Away post-MVP backlog (Phase 0.2+)
 
-Status
+Status legend
+
 - [ ] todo
 - [~] in progress
 - [x] done
 - [blocked]
 
 Rule:
-Work top-to-bottom.
+
+Work top-to-bottom unless explicitly reprioritized.
+
+Favor product value over infrastructure.
+
 Do not expand scope.
-Prefer robustness over feature growth.
 
 ---
 
-# Completed
+# MVP Status
 
-A-001 [x]
-A-002 [x]
-A-003 [x]
-A-004 [x]
-A-005 [x]
+Completed:
 
-B-001 [x]
-B-002 [x]
+- [x] Milestone A — Walking Skeleton
+- [x] Milestone B — Minimal Client
+- [x] Milestone C — irssi Bridge
+- [x] Milestone D — Resilience
+- [x] Milestone E — MVP Hardening
 
-C-001 [x]
-C-002 [x]
-
-D-001 [x]
-D-002 [x]
-D-003a [x]
-D-003b [x]
-D-003c [x]
+MVP is considered achieved.
 
 ---
 
-# Milestone E — MVP Hardening
+# Phase 0.2 — Usability Pass
 
 Goal:
-Validate assumptions and remove highest-risk defects.
 
-## E-001 Verify own-message ordering assumption
-Status: [x]
-
-Problem:
-D-003a assumes send order == irssi own echo order.
-
-Implement:
-- stress test rapid consecutive sends
-- verify no client_id mismatch
-- document assumption or fix if invalid
-
-Acceptance:
-50 rapid sends reconcile correctly.
-
-Priority: High
+Move from “works” to “pleasant daily companion”.
 
 ---
 
-## E-002 Multi-buffer routing correctness
-Status: [x]
+## F-001 Buffer / Unread Correctness
+Status: [ ]
 
 Implement:
-- verify sends land in intended buffer
-- verify channel vs DM routing
+- verify unread counts stay correct
+- active buffer switching correctness
+- basic buffer list polish
 
 Acceptance:
-multi-buffer manual test passes.
+- channel and DM switching behaves reliably
+- unread counters stay consistent
 
-Priority: High
+Priority:
+High
+
+Depends on:
+Milestone E
 
 ---
 
-## E-003 Event schema freeze (v1)
-Status: [x]
+## F-002 Mention Inbox MVP
+Status: [ ]
 
 Implement:
-- review current emitted schemas
-- remove accidental drift
-- document message.created and dm.created as stable
+- synthetic mentions buffer
+- collect highlight events into inbox
+- basic read/clear handling
+
+Minimal only.
+
+Do not add ranking, notifications, or triage logic.
 
 Acceptance:
-- schema fixtures committed.
-- schema drift test passes.
+- mentions appear in dedicated inbox
+- mention buffer usable from browser
 
-Priority: High
+Priority:
+High
+
+Depends on:
+F-001
 
 ---
 
-## E-004 Reconnect smoke test
-Status: [x]
+## F-003 Send Acknowledgement
+Status: [ ]
 
 Implement:
-- restart relay
-- refresh browser
-- verify D-001/D-002 behavior together
+- pending -> sent UI state
+- basic optimistic feedback
 
 Acceptance:
-reconnect flow works end-to-end.
+- user can distinguish sent vs pending
 
-Priority: Medium
+Priority:
+Medium
+
+Depends on:
+F-001
 
 ---
 
-## E-005 Backlog MVP spike
-Status: [x]
+## F-004 Presence Noise Collapse
+Status: [ ]
 
-Very small spike only:
-- fetch recent 20 messages on connect
+Implement:
+- collapse join/part noise
+- optionally hide low-value presence spam
 
-Timebox:
-1 session max.
+Acceptance:
+- busy channels remain readable
 
-If scope grows, stop.
+Priority:
+Medium
 
-Priority: Medium
+Depends on:
+F-001
+
+---
+
+# Phase 0.3 — Lightweight Persistence
+
+Goal:
+
+Survive restarts with minimal added complexity.
+
+---
+
+## G-001 Append-Only Event Journal Spike
+Status: [ ]
+
+Very small spike only.
+
+Implement:
+- append-only local event log
+- restore recent messages on restart
+
+Do NOT introduce sqlite yet.
+
+Acceptance:
+- relay restart preserves recent history
+
+Priority:
+Medium
+
+Depends on:
+F-002
+
+---
+
+## G-002 Search Spike (Optional)
+Status: [ ]
+
+Very small experiment only.
+
+Acceptance:
+- decide whether local search belongs in scope
+
+Priority:
+Low
+
+Depends on:
+G-001
 
 ---
 
 # Deferred (Not Now)
 
-- auth pairing
-- push
-- sqlite
-- search
-- mobile polish
+Explicit non-tasks:
+
+- WebAuthn pairing
+- push notifications
+- sqlite database
+- full mobile polish pass
+- multi-device sync
+- AI summarization
+- hosted multi-user support
+
+Do not start these.
 
 ---
 
-## Patch Budget Rule
+# Agent Task Execution Rules
 
-Default task budget:
-~30 lines preferred
->100 lines requires justification
+For each task:
+
+1. Implement only this task.
+2. Minimal patch.
+3. Add tests.
+4. Do not refactor unrelated code.
+5. No speculative abstractions.
+6. If scope grows, stop.
+
+---
+
+# Current Recommended Sequence
+
+1. F-001
+2. F-002
+3. F-003
+
+Reassess after these.
