@@ -91,7 +91,7 @@ Priority: High
 ---
 
 ## E-004 Reconnect smoke test
-Status: [ ]
+Status: [x]
 
 Implement:
 - restart relay
