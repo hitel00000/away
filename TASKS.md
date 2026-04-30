@@ -45,7 +45,7 @@ Survive restarts with minimal complexity.
 ---
 
 ## G-001 Append-Only Event Journal Spike
-Status: [ ]
+Status: [x]
 
 Very small spike only.
 
