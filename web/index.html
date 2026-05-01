@@ -33,6 +33,7 @@
             display: flex;
             flex-direction: column;
             height: 100vh;
+            overflow: hidden;
         }
 
         header {
@@ -253,7 +254,7 @@
             <div class="active-row">Active: <strong id="active-title">(none)</strong></div>
             <div id="messages"></div>
             <form id="input-form" onsubmit="sendMessage(event)">
-                <input id="target-field" type="text" placeholder="#target" value="#test" readonly>
+                <input id="target-field" type="text" placeholder="#target" value="" readonly>
                 <input id="input-field" type="text" placeholder="Type message..." autocomplete="off">
                 <button id="send-button" type="submit">Send</button>
             </form>

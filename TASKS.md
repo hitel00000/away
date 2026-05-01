@@ -121,6 +121,44 @@ Do NOT:
 
 ---
 
+## H-004 — Stability & Lifecycle Fixes
+
+Goal:
+
+Close gaps discovered during real usage.
+Focus on state consistency and basic lifecycle.
+
+No new features.
+
+---
+
+- [x] fix mark_read not surviving reload
+      (reconcile unread with snapshot)
+
+- [x] fix initial landing state
+      (no default #test, show neutral empty state)
+
+- [x] implement WebSocket reconnect
+      (simple retry with backoff)
+
+- [x] fix mobile scroll behavior
+      - message list is only scroll container
+      - auto-stick to bottom when appropriate
+      - input stays fixed at bottom
+
+- [x] verify snapshot-driven buffer rendering remains correct
+
+---
+
+Exit condition:
+
+- unread does not reappear after reload
+- first screen is not misleading
+- reconnect works reliably
+- mobile chat feels natural to use
+
+---
+
 # Deferred (Not Now)
 
 - G-002 Search Spike

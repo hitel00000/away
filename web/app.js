@@ -1,7 +1,85 @@
 import { collapsePresenceEvents, createChatState } from "./state.js";
 
-const proto = location.protocol === "https:" ? "wss" : "ws";
-const ws = new WebSocket(`${proto}://${location.host}/ws`);
+let ws;
+let reconnectDelay = 1000;
+const MAX_RECONNECT_DELAY = 10000;
+
+function connect() {
+  const proto = location.protocol === "https:" ? "wss" : "ws";
+  ws = new WebSocket(`${proto}://${location.host}/ws`);
+
+  ws.onopen = () => {
+    statusDiv.textContent = "Connected";
+    statusDiv.className = "status connected";
+    inputField.disabled = false;
+    sendButton.disabled = false;
+    reconnectDelay = 1000;
+
+    if (targetField.value) {
+      state.activateTarget(targetField.value);
+    }
+    render();
+  };
+
+  ws.onmessage = (event) => {
+    try {
+      const ev = JSON.parse(event.data);
+      if (ev.type === "message.created" || ev.type === "dm.created") {
+        const msg = { ...(ev.payload || {}), event_id: ev.id || "" };
+        const clientId = msg.client_id;
+        if (clientId && pendingMessageTimeouts.has(clientId)) {
+          clearTimeout(pendingMessageTimeouts.get(clientId));
+          pendingMessageTimeouts.delete(clientId);
+        }
+
+        state.receiveMessage(msg);
+        render();
+        return;
+      }
+
+      if (ev.type === "highlight.created") {
+        const payload = ev.payload || {};
+        state.receiveHighlight({
+          source_buffer_id: payload.source_buffer_id || payload.buffer_id || "",
+          target: payload.target || "",
+          nick: payload.nick || "",
+          text: payload.text || "",
+          timestamp: payload.timestamp || payload.ts || "",
+          message: payload.message || null,
+        });
+        render();
+        return;
+      }
+
+      if (ev.type === "sync.snapshot") {
+        state.receiveSnapshot(ev.payload || {});
+        render();
+        return;
+      }
+    } catch (e) {
+      console.error("parse error", e);
+    }
+  };
+
+  ws.onclose = () => {
+    statusDiv.textContent = "Disconnected";
+    statusDiv.className = "status disconnected";
+    inputField.disabled = true;
+    sendButton.disabled = true;
+
+    console.log(`WebSocket closed. Retrying in ${reconnectDelay}ms...`);
+    setTimeout(() => {
+      reconnectDelay = Math.min(reconnectDelay * 2, MAX_RECONNECT_DELAY);
+      connect();
+    }, reconnectDelay);
+  };
+
+  ws.onerror = (error) => {
+    console.error("websocket error", error);
+    ws.close();
+  };
+}
+
 const state = createChatState();
 
 const messagesDiv = document.getElementById("messages");
@@ -37,19 +115,29 @@ function addMessage(msg) {
   if (delivery && delivery.cls === "failed") {
     el.title = "Send unconfirmed (timeout)";
   }
+
+  // Smart scroll: only scroll if already at the bottom
+  const wasAtBottom = messagesDiv.scrollHeight - messagesDiv.clientHeight <= messagesDiv.scrollTop + 50;
+  
   messagesDiv.appendChild(el);
-  messagesDiv.scrollTop = messagesDiv.scrollHeight;
+  
+  if (wasAtBottom) {
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+  }
+  
   return el;
 }
 
 function renderMessages() {
   const active = state.getActiveBuffer();
-  activeTitle.textContent = active ? active.label : "(none)";
+  activeTitle.textContent = active ? active.label : "Select a channel";
   messagesDiv.innerHTML = "";
   const rows = collapsePresenceEvents(active ? active.messages : []);
   for (const msg of rows) {
     addMessage(msg);
   }
+  // Force scroll to bottom on full render
+  messagesDiv.scrollTop = messagesDiv.scrollHeight;
 }
 
 function renderBuffers() {
@@ -86,7 +174,9 @@ function renderBuffers() {
           target: buf.id
         }
       };
-      ws.send(JSON.stringify(command));
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify(command));
+      }
       
       // Close sidebar on mobile after selection
       if (window.innerWidth <= 768) {
@@ -105,66 +195,7 @@ function render() {
   renderMessages();
 }
 
-ws.onopen = () => {
-  statusDiv.textContent = "Connected";
-  statusDiv.className = "status connected";
-  inputField.disabled = false;
-  sendButton.disabled = false;
-
-  state.activateTarget(targetField.value || "#test");
-  render();
-};
-
-ws.onmessage = (event) => {
-  try {
-    const ev = JSON.parse(event.data);
-    if (ev.type === "message.created" || ev.type === "dm.created") {
-      const msg = { ...(ev.payload || {}), event_id: ev.id || "" };
-      const clientId = msg.client_id;
-      if (clientId && pendingMessageTimeouts.has(clientId)) {
-        clearTimeout(pendingMessageTimeouts.get(clientId));
-        pendingMessageTimeouts.delete(clientId);
-      }
-
-      state.receiveMessage(msg);
-      render();
-      return;
-    }
-
-    if (ev.type === "highlight.created") {
-      const payload = ev.payload || {};
-      state.receiveHighlight({
-        source_buffer_id: payload.source_buffer_id || payload.buffer_id || "",
-        target: payload.target || "",
-        nick: payload.nick || "",
-        text: payload.text || "",
-        timestamp: payload.timestamp || payload.ts || "",
-        message: payload.message || null,
-      });
-      render();
-      return;
-    }
-
-    if (ev.type === "sync.snapshot") {
-      state.receiveSnapshot(ev.payload || {});
-      render();
-      return;
-    }
-  } catch (e) {
-    console.error("parse error", e);
-  }
-};
-
-ws.onclose = () => {
-  statusDiv.textContent = "Disconnected";
-  statusDiv.className = "status disconnected";
-  inputField.disabled = true;
-  sendButton.disabled = true;
-};
-
-ws.onerror = (error) => {
-  console.error("websocket error", error);
-};
+connect();
 
 window.sendMessage = function sendMessage(event) {
   event.preventDefault();
@@ -198,7 +229,9 @@ window.sendMessage = function sendMessage(event) {
     },
   };
 
-  ws.send(JSON.stringify(command));
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify(command));
+  }
   inputField.value = "";
   render();
 };

@@ -444,3 +444,21 @@ test("markRead resets unread count", () => {
   const bAfter = st.listBuffers().find(x => x.id === "chan:#b");
   assert.equal(bAfter.unread, 0);
 });
+test("sync.snapshot resets unread counts", () => {
+  const st = createChatState();
+  st.activateTarget("#a");
+  recv(st, "#b", "alice");
+  
+  const bBefore = st.listBuffers().find(x => x.id === "chan:#b");
+  assert.equal(bBefore.unread, 1);
+
+  st.receiveSnapshot({
+    buffers: [
+      { id: "chan:#a", type: "channel", label: "#a" },
+      { id: "chan:#b", type: "channel", label: "#b" },
+    ]
+  });
+
+  const bAfter = st.listBuffers().find(x => x.id === "chan:#b");
+  assert.equal(bAfter.unread, 0);
+});

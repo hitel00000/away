@@ -35,7 +35,7 @@ export function createChatState() {
     if (t.length > 0) {
       return { id: `dm:${t}`, type: "dm", label: t };
     }
-    return { id: "chan:#test", type: "channel", label: "#test" };
+    return null;
   }
 
   function deriveBufferFromMessage(msg) {
@@ -58,7 +58,7 @@ export function createChatState() {
     if (nick) {
       return normalizeTarget(nick);
     }
-    return normalizeTarget("#test");
+    return null;
   }
 
   function deriveSourceBufferFromHighlight(highlight) {
@@ -78,7 +78,7 @@ export function createChatState() {
     if (highlight && highlight.message) {
       return deriveBufferFromMessage(highlight.message);
     }
-    return normalizeTarget("#test");
+    return null;
   }
 
   function markPendingSelf(clientID, target, draftMessage = null) {
@@ -134,6 +134,7 @@ export function createChatState() {
 
   function activateTarget(target) {
     const bufDef = normalizeTarget(target);
+    if (!bufDef) return null;
     ensureBuffer(bufDef.id, bufDef.type, bufDef.label);
     setActiveBuffer(bufDef.id);
     return bufDef.id;
@@ -256,7 +257,9 @@ export function createChatState() {
     
     for (const b of payload.buffers) {
       if (b && b.id && b.id !== MENTIONS_BUFFER_ID) {
-        ensureBuffer(b.id, b.type, b.label);
+        const buf = ensureBuffer(b.id, b.type, b.label);
+        // Reset unread counts on snapshot (acceptable simplification for lifecycle fixes)
+        buf.unread = 0;
         nextOrder.push(b.id);
       }
     }
