@@ -30,6 +30,9 @@ func main() {
 	if recent, err := journal.LoadRecent(); err != nil {
 		log.Printf("journal restore failed: %v", err)
 	} else {
+		// Replay policy:
+		// - On process start, restore bounded recent events from journal into ring.
+		// - On client register, hub replays from ring only (not directly from journal).
 		for _, ev := range recent {
 			ring.Append(ev)
 		}

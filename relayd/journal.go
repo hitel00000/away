@@ -38,18 +38,14 @@ func (j *EventJournal) LoadRecent() ([]Event, error) {
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 
 	var events []Event
-	seen := make(map[string]struct{})
 	for scanner.Scan() {
 		var ev Event
 		if err := json.Unmarshal(scanner.Bytes(), &ev); err != nil {
 			continue
 		}
-		if ev.ID != "" {
-			if _, ok := seen[ev.ID]; ok {
-				continue
-			}
-			seen[ev.ID] = struct{}{}
-		}
+		// Duplicate semantics:
+		// - Journal restore is append-order replay of valid lines.
+		// - Duplicate event IDs are preserved intentionally (no dedupe on load).
 		events = append(events, ev)
 	}
 	if err := scanner.Err(); err != nil {
@@ -83,6 +79,10 @@ func (j *EventJournal) Append(ev Event) error {
 		f.Close()
 		return err
 	}
+	// Best-effort durability only:
+	// - close(2) releases the descriptor but is not equivalent to fsync(2).
+	// - Data may still be lost on crash/power loss after successful Append.
+	// We intentionally avoid fsync-on-every-append to keep complexity/cost low.
 	if err := f.Close(); err != nil {
 		return err
 	}
@@ -131,5 +131,10 @@ func (j *EventJournal) compactLocked() error {
 	if err := out.Close(); err != nil {
 		return err
 	}
+	// Compaction failure model:
+	// - If writing tmp fails, we keep the original journal unchanged.
+	// - If rename fails, original journal also remains in place.
+	// - A failed attempt may leave a stale "*.tmp" file behind.
+	// This keeps append/replay available at the cost of possible temporary disk growth.
 	return os.Rename(tmp, j.path)
 }

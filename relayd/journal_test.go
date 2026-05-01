@@ -85,7 +85,7 @@ func TestEventJournalRetentionIsBounded(t *testing.T) {
 	}
 }
 
-func TestEventJournalRestoreDedupesByEventID(t *testing.T) {
+func TestEventJournalRestoreKeepsDuplicateEventIDs(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "events.ndjson")
 	content := `{"type":"message.created","version":1,"id":"evt-1"}` + "\n" +
@@ -100,10 +100,10 @@ func TestEventJournalRestoreDedupesByEventID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load failed: %v", err)
 	}
-	if len(events) != 2 {
-		t.Fatalf("want 2 unique events, got %d", len(events))
+	if len(events) != 3 {
+		t.Fatalf("want 3 events including duplicates, got %d", len(events))
 	}
-	if events[0].ID != "evt-1" || events[1].ID != "evt-2" {
-		t.Fatalf("unexpected IDs: %q, %q", events[0].ID, events[1].ID)
+	if events[0].ID != "evt-1" || events[1].ID != "evt-1" || events[2].ID != "evt-2" {
+		t.Fatalf("unexpected IDs: %q, %q, %q", events[0].ID, events[1].ID, events[2].ID)
 	}
 }
