@@ -7,7 +7,9 @@
     <title>Away - Message Feed</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
     <style>
         :root {
             --bg-color: #f8f9fa;
@@ -23,7 +25,9 @@
             --message-failed: #dc3545;
         }
 
-        * { box-sizing: border-box; }
+        * {
+            box-sizing: border-box;
+        }
 
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
@@ -61,8 +65,15 @@
             font-weight: 500;
         }
 
-        .connected { background: #d1e7dd; color: #0f5132; }
-        .disconnected { background: #f8d7da; color: #842029; }
+        .connected {
+            background: #d1e7dd;
+            color: #0f5132;
+        }
+
+        .disconnected {
+            background: #f8d7da;
+            color: #842029;
+        }
 
         .layout {
             display: flex;
@@ -105,7 +116,10 @@
             border-left: 3px solid transparent;
         }
 
-        .buffer-item:hover { background: #f1f3f5; }
+        .buffer-item:hover {
+            background: #f1f3f5;
+        }
+
         .buffer-item.active {
             background: var(--active-bg);
             color: var(--primary-color);
@@ -138,7 +152,6 @@
             display: flex;
             flex-direction: column;
             gap: 8px;
-            padding-bottom: 80px;
         }
 
         .message {
@@ -153,8 +166,13 @@
             margin-right: 4px;
         }
 
-        .message.pending { opacity: 0.6; }
-        .message.failed { color: var(--message-failed); }
+        .message.pending {
+            opacity: 0.6;
+        }
+
+        .message.failed {
+            color: var(--message-failed);
+        }
 
         .delivery {
             font-size: 0.65rem;
@@ -165,9 +183,21 @@
             border-radius: 3px;
             font-weight: 700;
         }
-        .delivery.pending { background: #fff3cd; color: #856404; }
-        .delivery.sent { background: #d1e7dd; color: #0f5132; }
-        .delivery.failed { background: #f8d7da; color: #842029; }
+
+        .delivery.pending {
+            background: #fff3cd;
+            color: #856404;
+        }
+
+        .delivery.sent {
+            background: #d1e7dd;
+            color: #0f5132;
+        }
+
+        .delivery.failed {
+            background: #f8d7da;
+            color: #842029;
+        }
 
         #input-form {
             padding: 16px 20px;
@@ -200,7 +230,10 @@
             outline: none;
         }
 
-        #input-field:focus { border-color: var(--primary-color); box-shadow: 0 0 0 3px rgba(0,123,255,0.1); }
+        #input-field:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+        }
 
         #send-button {
             padding: 10px 20px;
@@ -213,7 +246,9 @@
             transition: background 0.2s;
         }
 
-        #send-button:hover { background: var(--primary-hover); }
+        #send-button:hover {
+            background: var(--primary-hover);
+        }
 
         .mobile-toggle {
             display: none;
@@ -226,7 +261,10 @@
         }
 
         @media (max-width: 768px) {
-            .mobile-toggle { display: block; }
+            .mobile-toggle {
+                display: block;
+            }
+
             #buffer-list {
                 position: absolute;
                 top: 0;
@@ -235,12 +273,25 @@
                 z-index: 50;
                 transform: translateX(-100%);
                 width: 280px;
-                box-shadow: 4px 0 12px rgba(0,0,0,0.1);
+                box-shadow: 4px 0 12px rgba(0, 0, 0, 0.1);
             }
-            #buffer-list.open { transform: translateX(0); }
-            #target-field { display: none; }
-            #messages { padding: 12px; padding-bottom: 80px; }
-            #input-form { padding: 12px; padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
+
+            #buffer-list.open {
+                transform: translateX(0);
+            }
+
+            #target-field {
+                display: none;
+            }
+
+            #messages {
+                padding: 12px;
+            }
+
+            #input-form {
+                padding: 12px;
+                padding-bottom: calc(12px + env(safe-area-inset-bottom));
+            }
         }
     </style>
 </head>
