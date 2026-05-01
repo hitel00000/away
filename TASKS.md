@@ -70,109 +70,167 @@ Validate that the system is actually usable in daily IRC workflow.
 ## H-001 Use In Real Conversations
 Status: [x]
 
-Use the system in real IRC sessions.
-
-Focus:
-
-- passive reading
-- occasional replies
-- reconnect scenarios
-
-Record:
-
-- friction points
-- missing primitives
-- surprising behavior
-
-Do NOT fix immediately unless critical.
-
----
-
 ## H-002 Identify Top 3 Frictions
 Status: [x]
-
-From real usage, identify:
-
-- top 3 UX issues
-- top 3 reliability issues
-
-Write them down explicitly.
-
-No implementation in this step.
-
----
 
 ## H-003 Targeted Fixes Only
 Status: [x]
 
-Implement only:
-
-- show joined buffers from snapshot
-- fix duplicate buffer entries on reload
-- minimal mark_read (reset unread)
-- minimal mobile layout (list toggle + full-width chat)
-- basic UI cleanup (spacing, typography only)
-
-Do NOT:
-
-- redesign UI
-- introduce new state models
-- add advanced read tracking
+## H-004 Stability & Lifecycle Fixes
+Status: [x]
 
 ---
 
-## H-004 — Stability & Lifecycle Fixes
+## H-005 Snapshot Ownership Fix
+Status: [ ]
 
 Goal:
 
-Close gaps discovered during real usage.
-Focus on state consistency and basic lifecycle.
+Move snapshot responsibility from irssi plugin to relay.
 
-No new features.
+Reason:
 
----
-
-- [x] fix mark_read not surviving reload
-      (reconcile unread with snapshot)
-
-- [x] fix initial landing state
-      (no default #test, show neutral empty state)
-
-- [x] implement WebSocket reconnect
-      (simple retry with backoff)
-
-- [x] fix mobile scroll behavior
-      - message list is only scroll container
-      - auto-stick to bottom when appropriate
-      - input stays fixed at bottom
-
-- [x] verify snapshot-driven buffer rendering remains correct
+Current implementation treats snapshot as an event,
+causing ordering issues, replay inconsistency,
+and state corruption.
 
 ---
 
-Exit condition:
+Tasks:
 
-- unread does not reappear after reload
-- first screen is not misleading
-- reconnect works reliably
-- mobile chat feels natural to use
+- [ ] remove `sync.snapshot` emission from irssi plugin
+
+- [ ] ensure plugin only emits:
+      - message.created
+      - highlight.created
+      - presence.*
+
+- [ ] implement initial buffer dump from plugin
+      (event-based, one-time seed only)
+
+- [ ] implement `buildSnapshot()` in relay
+      using in-memory or persisted state
+
+- [ ] send snapshot only during websocket init
+
+- [ ] ensure snapshot is NOT stored in event journal
+
+- [ ] ensure snapshot is NOT replayed
+
+- [ ] client: treat snapshot as full state replace
+      (not reducer-based merge)
+
+---
+
+Acceptance:
+
+- snapshot never appears in journal
+- snapshot always arrives before first live event
+- reconnect produces consistent buffer list
+- no duplicate / missing buffers after reload
+
+---
+
+## H-006 Reconnect & Resume Correctness
+Status: [ ]
+
+Goal:
+
+Ensure reconnect behavior is deterministic and safe.
+
+---
+
+Tasks:
+
+- [ ] implement `resume_from` handling in relay
+
+- [ ] replay events strictly AFTER given event_id
+
+- [ ] fallback to snapshot if replay not possible
+
+- [ ] guarantee no duplicate events on reconnect
+
+- [ ] ensure ordering: snapshot → replay → live
+
+---
+
+Acceptance:
+
+- reconnect never causes message duplication
+- reconnect never loses messages
+- reconnect preserves scroll position semantics
+
+---
+
+## H-007 Event Stream Correctness
+Status: [ ]
+
+Goal:
+
+Ensure event stream behaves predictably under all conditions.
+
+---
+
+Tasks:
+
+- [ ] dedupe events by event_id
+
+- [ ] enforce ordering (timestamp vs arrival consistency)
+
+- [ ] verify no out-of-order application in client
+
+- [ ] ensure snapshot boundary is respected
+
+---
+
+Acceptance:
+
+- no duplicate messages visible
+- no ordering glitches during heavy traffic
+- consistent state after long sessions
+
+---
+
+## H-008 Minimal Auth (Session Layer)
+Status: [ ]
+
+Goal:
+
+Introduce minimal session identity without full auth complexity.
+
+---
+
+Tasks:
+
+- [ ] introduce temporary device_id
+
+- [ ] bind websocket session to device_id
+
+- [ ] basic handshake validation
+
+- [ ] prepare structure for future trusted devices
+
+---
+
+Acceptance:
+
+- multiple clients do not conflict
+- session identity is stable across reconnect
 
 ---
 
 # Deferred (Not Now)
 
-- G-002 Search Spike
 - WebAuthn pairing
 - push notifications
-- sqlite database
-- full mobile polish pass
-- multi-device sync
-- AI summarization
-- hosted multi-user support
+- sqlite full-text search
+- multi-device sync conflict resolution
+- advanced read tracking
 - message threading
-- notification routing
+- hosted multi-user support
+- AI summarization
 
-Do not start these until after Phase 0.4.
+Do not start these until after Phase 0.4 stabilizes.
 
 ---
 
@@ -182,7 +240,7 @@ For each task:
 
 1. Implement only this task.
 2. Minimal patch.
-3. Add tests.
+3. Add tests where possible.
 4. Do not refactor unrelated code.
 5. No speculative abstractions.
 6. If scope grows, stop.

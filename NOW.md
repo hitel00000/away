@@ -1,102 +1,82 @@
 # NOW.md
 
-Current focus:
+## 🎯 Current Goal
 
-Fix the smallest set of issues required to make the app usable.
+Make the system **state-safe under reconnect and initial load**.
 
-No new features beyond observed friction.
-
----
-
-## What to do (in order)
-
-### 1. Fix correctness issues first
-
-- fix duplicate buffers on reload
-- ensure buffer list reflects actual joined channels
-
-If data feels inconsistent, fix that before anything else.
+Not adding features.
+Fixing correctness.
 
 ---
 
-### 2. Make basic navigation usable
+## 🔥 Top Priority (Do in order)
 
-- show all joined buffers from snapshot
-- allow switching without confusion
+1. H-005 Snapshot Ownership Fix
 
-No sorting, no grouping, no polish.
-
-Just make it usable.
-
----
-
-### 3. Add minimal read handling
-
-- implement basic mark_read
-- allow clearing unread manually
-
-Do not implement precise read positions.
+   - remove snapshot from plugin
+   - move snapshot creation to relay
+   - ensure snapshot is NOT part of journal
 
 ---
 
-### 4. Make it barely usable on mobile
+2. H-006 Reconnect & Resume
 
-Limit scope strictly:
-
-- channel list toggle (show/hide)
-- message view full width
-- input fixed at bottom
-
-Do not attempt full responsive design.
+   - implement resume_from
+   - snapshot fallback when replay fails
+   - guarantee no duplication
 
 ---
 
-### 5. Clean up obvious UI friction
+3. H-007 Event Stream Correctness
 
-Only fix what blocks usage:
-
-- spacing consistency
-- readable font sizes
-- reduce visual noise
-
-Do NOT:
-
-- redesign layout
-- introduce design system
-- refactor components
+   - dedupe by event_id
+   - enforce ordering
+   - fix snapshot boundary issues
 
 ---
 
-## What NOT to do
+## ⚠️ Stop Conditions
 
-- do not start G-002 (search)
-- do not introduce new persistence layers
-- do not redesign state management
-- do not optimize prematurely
+Stop immediately and fix if:
 
-If something feels like a “nice improvement”,
-it is probably out of scope.
-
----
-
-## Working style
-
-- make small patches
-- test in real usage immediately
-- commit frequently
-- stop when it feels “good enough”
+- snapshot appears in journal
+- reconnect duplicates messages
+- buffers disappear or duplicate
+- unread count becomes inconsistent
+- message order flips
 
 ---
 
-## Exit condition
+## 🧪 Mandatory Test Loop
 
-Stop when:
+Repeat constantly:
 
-- you can comfortably read and reply from phone
-- reconnect does not confuse you
-- buffer navigation is not frustrating
+1. open client
+2. receive messages
+3. disconnect network
+4. reconnect
+5. verify:
+   - buffers intact
+   - unread correct
+   - no duplication
+   - ordering preserved
 
-Then:
+---
 
-→ update TASKS.md
-→ identify next real need (not assumed need)
+## ❌ Do NOT Work On
+
+- UI polish
+- search
+- push notifications
+- auth beyond minimal session
+- new features
+
+---
+
+## 🧠 Reminder
+
+Snapshot is NOT an event.
+
+It is a state reset boundary.
+
+If treated like an event, everything breaks.
