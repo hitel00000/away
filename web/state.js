@@ -251,19 +251,17 @@ export function createChatState() {
   function receiveSnapshot(payload) {
     if (!payload || !Array.isArray(payload.buffers)) return;
     
-    const snapshotIDs = new Set();
+    // Start with system buffers
+    const nextOrder = [MENTIONS_BUFFER_ID];
+    
     for (const b of payload.buffers) {
-      if (b && b.id) {
+      if (b && b.id && b.id !== MENTIONS_BUFFER_ID) {
         ensureBuffer(b.id, b.type, b.label);
-        snapshotIDs.add(b.id);
+        nextOrder.push(b.id);
       }
     }
 
-    // Replace the order with filtered existing + new from snapshot
-    const nextOrder = bufferOrder.filter(id => 
-      id === MENTIONS_BUFFER_ID || snapshotIDs.has(id)
-    );
-
+    // Fully drive the visible list from the snapshot
     bufferOrder.length = 0;
     bufferOrder.push(...nextOrder);
   }
