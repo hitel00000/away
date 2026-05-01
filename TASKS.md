@@ -103,7 +103,7 @@ No implementation in this step.
 ---
 
 ## H-003 Targeted Fixes Only
-Status: [ ]
+Status: [x]
 
 Implement only:
 

@@ -165,6 +165,34 @@ sub private_event_json {
   );
 }
 
+sub sync_snapshot_json {
+  my @buffers_json = ();
+  
+  for my $server (Irssi::servers()) {
+      # Channels
+      for my $chan ($server->channels()) {
+          push @buffers_json, sprintf('{"id":"chan:%s","type":"channel","label":"%s"}', 
+              json_escape($chan->{name}), json_escape($chan->{name}));
+      }
+      # Queries (DMs)
+      for my $query ($server->queries()) {
+          push @buffers_json, sprintf('{"id":"dm:%s","type":"dm","label":"%s"}', 
+              json_escape($query->{name}), json_escape($query->{name}));
+      }
+  }
+
+  return sprintf(
+'{"type":"sync.snapshot","version":1,"id":"%s","timestamp":"%s","payload":{"buffers":[%s]}}',
+      event_id(),
+      iso_ts(),
+      join(',', @buffers_json)
+  );
+}
+
+sub emit_snapshot {
+  emit_json(sync_snapshot_json());
+}
+
 #
 # -------------------------
 # irssi signal hooks
@@ -223,6 +251,7 @@ sub init_command_fifo {
 
 # NOTE: We use regex for parsing instead of JSON::PP because some irssi
 # installations run on very old Perl versions where JSON::PP is not available.
+# This is an intentional limitation to maximize compatibility.
 sub parse_send_message {
 
   my ($line)=@_;
@@ -246,6 +275,13 @@ sub parse_send_message {
   return ($target,$text,$client_id);
 }
 
+sub parse_mark_read {
+  my ($line)=@_;
+  return unless $line =~ /"action":"mark_read"/;
+  return unless $line =~ /"target":"([^"]+)"/;
+  return $1;
+}
+
 sub poll_commands {
 
   return 1 unless $cmd_fh;
@@ -257,6 +293,12 @@ sub poll_commands {
 
   for my $line (split /\n/, $buf) {
   
+      my $target_read = parse_mark_read($line);
+      if ($target_read) {
+          Irssi::print("away_bridge: mark_read $target_read (wire ack)");
+          next;
+      }
+
       my ($target,$text,$client_id)=parse_send_message($line);
       next unless $target;
   
@@ -283,8 +325,11 @@ Irssi::signal_add('message public', 'on_public');
 Irssi::signal_add('message private', 'on_private');
 Irssi::signal_add('message own_public', 'on_own_public');
 Irssi::signal_add('message own_private', 'on_own_private');
+Irssi::signal_add('channel joined', 'emit_snapshot');
+Irssi::signal_add('channel parted', 'emit_snapshot');
 
 init_command_fifo();
+emit_snapshot();
 
 Irssi::timeout_add(250, 'poll_commands', undef);
 Irssi::timeout_add(5000, 'flush_queue', undef);

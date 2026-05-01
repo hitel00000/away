@@ -20,6 +20,8 @@ export function createChatState() {
         messages: [],
       };
       buffers.set(bufferID, buf);
+    }
+    if (!bufferOrder.includes(bufferID)) {
       bufferOrder.push(bufferID);
     }
     return buf;
@@ -28,21 +30,18 @@ export function createChatState() {
   function normalizeTarget(target) {
     const t = String(target || "").trim();
     if (t.startsWith("#")) {
-      return { id: `ch:${t}`, type: "channel", label: t };
+      return { id: `chan:${t}`, type: "channel", label: t };
     }
     if (t.length > 0) {
       return { id: `dm:${t}`, type: "dm", label: t };
     }
-    return { id: "ch:#test", type: "channel", label: "#test" };
+    return { id: "chan:#test", type: "channel", label: "#test" };
   }
 
   function deriveBufferFromMessage(msg) {
     const bufferID = String((msg && msg.buffer_id) || "").trim();
-    if (bufferID.startsWith("ch:")) {
-      return { id: bufferID, type: "channel", label: bufferID.slice(3) };
-    }
     if (bufferID.startsWith("chan:")) {
-      return { id: `ch:${bufferID.slice(5)}`, type: "channel", label: bufferID.slice(5) };
+      return { id: bufferID, type: "channel", label: bufferID.slice(5) };
     }
     if (bufferID.startsWith("dm:")) {
       return { id: bufferID, type: "dm", label: bufferID.slice(3) };
@@ -66,8 +65,8 @@ export function createChatState() {
     const sourceBufferID = String(
       (highlight && (highlight.source_buffer_id || highlight.buffer_id)) || ""
     ).trim();
-    if (sourceBufferID.startsWith("ch:")) {
-      return { id: sourceBufferID, type: "channel", label: sourceBufferID.slice(3) };
+    if (sourceBufferID.startsWith("chan:")) {
+      return { id: sourceBufferID, type: "channel", label: sourceBufferID.slice(5) };
     }
     if (sourceBufferID.startsWith("dm:")) {
       return { id: sourceBufferID, type: "dm", label: sourceBufferID.slice(3) };
@@ -124,6 +123,15 @@ export function createChatState() {
     return true;
   }
 
+  function markRead(bufferID) {
+    const buf = buffers.get(bufferID);
+    if (buf) {
+      buf.unread = 0;
+      return true;
+    }
+    return false;
+  }
+
   function activateTarget(target) {
     const bufDef = normalizeTarget(target);
     ensureBuffer(bufDef.id, bufDef.type, bufDef.label);
@@ -143,15 +151,17 @@ export function createChatState() {
     }
 
     const clientID = msg && msg.client_id;
-    const fromPending = clientID && pendingSelfClientIDs.has(clientID);
-    if (fromPending && consumedSelfAckClientIDs.has(clientID)) {
+    if (clientID && consumedSelfAckClientIDs.has(clientID)) {
+      const derived = deriveBufferFromMessage(msg);
       return {
-        bufferID: pendingSelfClientIDs.get(clientID) || "",
+        bufferID: derived.id,
         isSelf: true,
         unread: 0,
         active: false,
       };
     }
+
+    const fromPending = clientID && pendingSelfClientIDs.has(clientID);
     const pendingBufferID = fromPending ? pendingSelfClientIDs.get(clientID) : null;
     const derived = deriveBufferFromMessage(msg);
     const bufferID = pendingBufferID || derived.id;
@@ -238,6 +248,26 @@ export function createChatState() {
     };
   }
 
+  function receiveSnapshot(payload) {
+    if (!payload || !Array.isArray(payload.buffers)) return;
+    
+    const snapshotIDs = new Set();
+    for (const b of payload.buffers) {
+      if (b && b.id) {
+        ensureBuffer(b.id, b.type, b.label);
+        snapshotIDs.add(b.id);
+      }
+    }
+
+    // Replace the order with filtered existing + new from snapshot
+    const nextOrder = bufferOrder.filter(id => 
+      id === MENTIONS_BUFFER_ID || snapshotIDs.has(id)
+    );
+
+    bufferOrder.length = 0;
+    bufferOrder.push(...nextOrder);
+  }
+
   function listBuffers() {
     return bufferOrder.map((id) => buffers.get(id));
   }
@@ -260,12 +290,14 @@ export function createChatState() {
     setActiveBuffer,
     receiveMessage,
     receiveHighlight,
+    receiveSnapshot,
     listBuffers,
     getActiveBuffer,
     getActiveTarget,
     markPendingSelf,
     clearPendingSelf,
     failPendingSelf,
+    markRead,
   };
 }
 

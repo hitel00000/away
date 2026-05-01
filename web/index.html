@@ -2,173 +2,263 @@
 <html>
 
 <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Away - Message Feed</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
     <style>
-        body {
-            font-family: monospace;
-            margin: 20px;
+        :root {
+            --bg-color: #f8f9fa;
+            --sidebar-bg: #ffffff;
+            --text-color: #212529;
+            --border-color: #e9ecef;
+            --primary-color: #007bff;
+            --primary-hover: #0056b3;
+            --unread-bg: #dc3545;
+            --active-bg: #e7f1ff;
+            --message-sent: #198754;
+            --message-pending: #ffc107;
+            --message-failed: #dc3545;
         }
 
+        * { box-sizing: border-box; }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            margin: 0;
+            background-color: var(--bg-color);
+            color: var(--text-color);
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        header {
+            padding: 12px 20px;
+            background: #fff;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            z-index: 100;
+        }
+
+        h1 {
+            margin: 0;
+            font-size: 1.25rem;
+            font-weight: 600;
+            color: var(--primary-color);
+        }
+
+        .status {
+            font-size: 0.75rem;
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-weight: 500;
+        }
+
+        .connected { background: #d1e7dd; color: #0f5132; }
+        .disconnected { background: #f8d7da; color: #842029; }
+
         .layout {
-            display: grid;
-            grid-template-columns: 220px 1fr;
-            gap: 12px;
-            max-width: 980px;
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+            position: relative;
         }
 
         #buffer-list {
-            border: 1px solid #ccc;
-            padding: 8px;
+            width: 260px;
+            background: var(--sidebar-bg);
+            border-right: 1px solid var(--border-color);
             display: flex;
             flex-direction: column;
-            gap: 6px;
-            min-height: 400px;
+            overflow-y: auto;
+            transition: transform 0.3s ease;
+        }
+
+        .main-view {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+            background: #fff;
         }
 
         .buffer-item {
+            width: 100%;
             text-align: left;
-            padding: 6px 8px;
-            border: 1px solid #ddd;
-            background: #fff;
+            padding: 10px 16px;
+            border: none;
+            background: transparent;
             cursor: pointer;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            font-family: monospace;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
+            color: #495057;
+            border-left: 3px solid transparent;
         }
 
+        .buffer-item:hover { background: #f1f3f5; }
         .buffer-item.active {
-            border-color: #0066cc;
-            background: #eaf3ff;
+            background: var(--active-bg);
+            color: var(--primary-color);
+            border-left-color: var(--primary-color);
+            font-weight: 500;
         }
 
         .unread-badge {
-            min-width: 16px;
-            height: 16px;
-            border-radius: 999px;
-            padding: 0 4px;
-            background: #dc3545;
+            background: var(--unread-bg);
             color: #fff;
-            font-size: 11px;
-            line-height: 16px;
-            text-align: center;
-        }
-
-        #messages {
-            border: 1px solid #ccc;
-            padding: 10px;
-            height: 400px;
-            overflow-y: auto;
-        }
-
-        .message {
-            margin: 5px 0;
-            padding: 5px;
-            border-left: 3px solid #0066cc;
-        }
-
-        .message.pending {
-            opacity: 0.6;
-            border-left-style: dashed;
-        }
-
-        .message.sent {
-            border-left-color: #198754;
-        }
-
-        .message.failed {
-            border-left-color: #dc3545;
-            color: #721c24;
-        }
-
-        .delivery {
-            margin-left: 8px;
-            font-size: 11px;
-            border-radius: 3px;
-            padding: 1px 5px;
-            border: 1px solid #ccc;
-            vertical-align: middle;
-        }
-
-        .delivery.pending {
-            color: #664d03;
-            border-color: #ffecb5;
-            background: #fff3cd;
-        }
-
-        .delivery.sent {
-            color: #0f5132;
-            border-color: #badbcc;
-            background: #d1e7dd;
-        }
-
-        .delivery.failed {
-            color: #721c24;
-            border-color: #f5c2c7;
-            background: #f8d7da;
-        }
-
-        .nick {
-            font-weight: bold;
-        }
-
-        .status {
-            margin-bottom: 10px;
-            padding: 5px;
-            border-radius: 3px;
-        }
-
-        .connected {
-            background: #d4edda;
-            color: #155724;
-        }
-
-        .disconnected {
-            background: #f8d7da;
-            color: #721c24;
+            font-size: 0.7rem;
+            padding: 2px 6px;
+            border-radius: 10px;
+            font-weight: 600;
+            font-family: 'Inter', sans-serif;
         }
 
         .active-row {
-            margin: 6px 0;
-            color: #333;
+            padding: 12px 20px;
+            border-bottom: 1px solid var(--border-color);
+            font-size: 0.9rem;
+            font-weight: 500;
+            background: #fff;
         }
 
+        #messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .message {
+            padding: 4px 0;
+            line-height: 1.5;
+            font-size: 0.95rem;
+        }
+
+        .nick {
+            font-weight: 600;
+            color: #495057;
+            margin-right: 4px;
+        }
+
+        .message.pending { opacity: 0.6; }
+        .message.failed { color: var(--message-failed); }
+
+        .delivery {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-left: 8px;
+            padding: 1px 4px;
+            border-radius: 3px;
+            font-weight: 700;
+        }
+        .delivery.pending { background: #fff3cd; color: #856404; }
+        .delivery.sent { background: #d1e7dd; color: #0f5132; }
+        .delivery.failed { background: #f8d7da; color: #842029; }
+
         #input-form {
-            margin-top: 10px;
+            padding: 16px 20px;
+            background: #fff;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            gap: 10px;
+        }
+
+        #target-field {
+            width: 120px;
+            padding: 10px 14px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            background: #f1f3f5;
         }
 
         #input-field {
-            width: 80%;
-            padding: 8px;
-            font-family: monospace;
+            flex: 1;
+            padding: 10px 14px;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 0.95rem;
+            outline: none;
         }
 
+        #input-field:focus { border-color: var(--primary-color); box-shadow: 0 0 0 3px rgba(0,123,255,0.1); }
+
         #send-button {
-            padding: 8px 16px;
+            padding: 10px 20px;
+            background: var(--primary-color);
+            color: #fff;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
             cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        #send-button:hover { background: var(--primary-hover); }
+
+        .mobile-toggle {
+            display: none;
+            background: none;
+            border: none;
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 0;
+            margin-right: 12px;
+        }
+
+        @media (max-width: 768px) {
+            .mobile-toggle { display: block; }
+            #buffer-list {
+                position: absolute;
+                top: 0;
+                left: 0;
+                bottom: 0;
+                z-index: 50;
+                transform: translateX(-100%);
+                width: 280px;
+                box-shadow: 4px 0 12px rgba(0,0,0,0.1);
+            }
+            #buffer-list.open { transform: translateX(0); }
+            #target-field { display: none; }
+            #messages { padding: 12px; }
+            #input-form { padding: 12px; }
         }
     </style>
 </head>
 
 <body>
-    <h1>Away - Message Feed</h1>
-    <div id="status" class="status disconnected">Disconnected</div>
+    <header>
+        <div style="display: flex; align-items: center;">
+            <button id="sidebar-toggle" class="mobile-toggle">☰</button>
+            <h1>Away</h1>
+        </div>
+        <div id="status" class="status disconnected">Disconnected</div>
+    </header>
 
     <div class="layout">
         <div id="buffer-list"></div>
-        <div>
+        <div class="main-view">
             <div class="active-row">Active: <strong id="active-title">(none)</strong></div>
             <div id="messages"></div>
+            <form id="input-form" onsubmit="sendMessage(event)">
+                <input id="target-field" type="text" placeholder="#target" value="#test" readonly>
+                <input id="input-field" type="text" placeholder="Type message..." autocomplete="off">
+                <button id="send-button" type="submit">Send</button>
+            </form>
         </div>
     </div>
-
-    <form id="input-form" onsubmit="sendMessage(event)">
-        <input id="target-field" type="text" placeholder="#target" value="#test"
-            style="width: 15%; padding: 8px; font-family: monospace;">
-        <input id="input-field" type="text" placeholder="Type message..." autocomplete="off"
-            style="width: 65%; padding: 8px; font-family: monospace;">
-        <button id="send-button" type="submit">Send</button>
-    </form>
 
     <script type="module" src="./app.js"></script>
 </body>

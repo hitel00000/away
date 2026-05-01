@@ -16,7 +16,7 @@ test("incoming message in inactive buffer increments unread", () => {
   recv(st, "#b", "alice");
 
   const buffers = st.listBuffers();
-  const b = buffers.find((x) => x.id === "ch:#b");
+  const b = buffers.find((x) => x.id === "chan:#b");
   assert.equal(b.unread, 1);
 });
 
@@ -29,7 +29,7 @@ test("message.created with chan: buffer_id maps to channel buffer", () => {
     text: "hello",
   });
 
-  const channel = st.listBuffers().find((x) => x.id === "ch:#b");
+  const channel = st.listBuffers().find((x) => x.id === "chan:#b");
   const dm = st.listBuffers().find((x) => x.id === "dm:alice");
   assert.ok(channel);
   assert.equal(channel.unread, 1);
@@ -42,7 +42,7 @@ test("incoming message in active buffer does not increment unread", () => {
   recv(st, "#a", "alice");
 
   const active = st.getActiveBuffer();
-  assert.equal(active.id, "ch:#a");
+  assert.equal(active.id, "chan:#a");
   assert.equal(active.unread, 0);
 });
 
@@ -53,7 +53,7 @@ test("switching into unread buffer marks read", () => {
   st.activateTarget("#b");
 
   const active = st.getActiveBuffer();
-  assert.equal(active.id, "ch:#b");
+  assert.equal(active.id, "chan:#b");
   assert.equal(active.unread, 0);
 });
 
@@ -63,13 +63,13 @@ test("mark-read on activation affects only activated buffer", () => {
   recv(st, "#b", "alice");
   recv(st, "bob", "bob");
 
-  const beforeB = st.listBuffers().find((x) => x.id === "ch:#b");
+  const beforeB = st.listBuffers().find((x) => x.id === "chan:#b");
   const beforeDM = st.listBuffers().find((x) => x.id === "dm:bob");
   assert.equal(beforeB.unread, 1);
   assert.equal(beforeDM.unread, 1);
 
   st.activateTarget("#b");
-  const afterB = st.listBuffers().find((x) => x.id === "ch:#b");
+  const afterB = st.listBuffers().find((x) => x.id === "chan:#b");
   const afterDM = st.listBuffers().find((x) => x.id === "dm:bob");
   assert.equal(afterB.unread, 0);
   assert.equal(afterDM.unread, 1);
@@ -82,7 +82,7 @@ test("channel and DM switching keeps state isolated", () => {
   recv(st, "#a", "alice");
 
   const dm = st.listBuffers().find((x) => x.id === "dm:bob");
-  const ch = st.listBuffers().find((x) => x.id === "ch:#a");
+  const ch = st.listBuffers().find((x) => x.id === "chan:#a");
   assert.equal(dm.unread, 1);
   assert.equal(ch.unread, 0);
 
@@ -106,7 +106,7 @@ test("self-sent event never increments unread in same buffer", () => {
   recv(st, "#a", "someone-else", "mine", "cid-1");
 
   const active = st.getActiveBuffer();
-  assert.equal(active.id, "ch:#a");
+  assert.equal(active.id, "chan:#a");
   assert.equal(active.unread, 0);
 });
 
@@ -116,7 +116,7 @@ test("self-sent event in inactive buffer does not create unread", () => {
   st.markPendingSelf("cid-2", "#b");
   recv(st, "#b", "alice", "mine", "cid-2");
 
-  const b = st.listBuffers().find((x) => x.id === "ch:#b");
+  const b = st.listBuffers().find((x) => x.id === "chan:#b");
   assert.equal(b.unread, 0);
 });
 
@@ -125,7 +125,7 @@ test("non-self message with same nick does increment unread when inactive", () =
   st.activateTarget("#a");
   recv(st, "#b", "me", "not-correlated", "");
 
-  const b = st.listBuffers().find((x) => x.id === "ch:#b");
+  const b = st.listBuffers().find((x) => x.id === "chan:#b");
   assert.equal(b.unread, 1);
 });
 
@@ -146,7 +146,7 @@ test("highlight events populate mentions buffer", () => {
   st.activateTarget("#a");
 
   highlight(st, {
-    source_buffer_id: "ch:#b",
+    source_buffer_id: "chan:#b",
     nick: "alice",
     text: "ping @me",
     timestamp: "2026-04-30T00:00:00Z",
@@ -154,7 +154,7 @@ test("highlight events populate mentions buffer", () => {
 
   const mentions = st.listBuffers().find((x) => x.id === "system:mentions");
   assert.equal(mentions.messages.length, 1);
-  assert.equal(mentions.messages[0].source.id, "ch:#b");
+  assert.equal(mentions.messages[0].source.id, "chan:#b");
   assert.equal(mentions.messages[0].nick, "alice");
   assert.equal(mentions.messages[0].text, "ping @me");
 });
@@ -162,8 +162,8 @@ test("highlight events populate mentions buffer", () => {
 test("mentions unread increments on highlight when inactive", () => {
   const st = createChatState();
   st.activateTarget("#a");
-  highlight(st, { source_buffer_id: "ch:#b", nick: "alice", text: "one" });
-  highlight(st, { source_buffer_id: "ch:#b", nick: "alice", text: "two" });
+  highlight(st, { source_buffer_id: "chan:#b", nick: "alice", text: "one" });
+  highlight(st, { source_buffer_id: "chan:#b", nick: "alice", text: "two" });
 
   const mentions = st.listBuffers().find((x) => x.id === "system:mentions");
   assert.equal(mentions.unread, 2);
@@ -173,16 +173,16 @@ test("opening mentions clears only mentions unread", () => {
   const st = createChatState();
   st.activateTarget("#a");
   recv(st, "#b", "alice", "regular");
-  highlight(st, { source_buffer_id: "ch:#b", nick: "alice", text: "highlight" });
+  highlight(st, { source_buffer_id: "chan:#b", nick: "alice", text: "highlight" });
 
-  const beforeSource = st.listBuffers().find((x) => x.id === "ch:#b");
+  const beforeSource = st.listBuffers().find((x) => x.id === "chan:#b");
   const beforeMentions = st.listBuffers().find((x) => x.id === "system:mentions");
   assert.equal(beforeSource.unread, 1);
   assert.equal(beforeMentions.unread, 1);
 
   st.setActiveBuffer("system:mentions");
 
-  const afterSource = st.listBuffers().find((x) => x.id === "ch:#b");
+  const afterSource = st.listBuffers().find((x) => x.id === "chan:#b");
   const afterMentions = st.listBuffers().find((x) => x.id === "system:mentions");
   assert.equal(afterMentions.unread, 0);
   assert.equal(afterSource.unread, 1);
@@ -204,14 +204,14 @@ test("duplicate highlight event_id is deduped in mentions", () => {
 
   highlight(st, {
     event_id: "hl-1",
-    source_buffer_id: "ch:#b",
+    source_buffer_id: "chan:#b",
     nick: "alice",
     text: "ping @me",
     timestamp: "2026-04-30T00:00:00Z",
   });
   highlight(st, {
     event_id: "hl-1",
-    source_buffer_id: "ch:#b",
+    source_buffer_id: "chan:#b",
     nick: "alice",
     text: "ping @me",
     timestamp: "2026-04-30T00:00:00Z",
@@ -269,7 +269,7 @@ test("duplicate replayed event_id does not inflate unread", () => {
   st.receiveMessage({ target: "#b", nick: "alice", text: "hi", event_id: "evt-r-1" });
   st.receiveMessage({ target: "#b", nick: "alice", text: "hi", event_id: "evt-r-1" });
 
-  const b = st.listBuffers().find((x) => x.id === "ch:#b");
+  const b = st.listBuffers().find((x) => x.id === "chan:#b");
   assert.equal(b.unread, 1);
   assert.equal(b.messages.length, 1);
 });
@@ -347,6 +347,7 @@ test("message boundary splits join bursts into separate groups", () => {
   const rows = [
     { event_type: "join", nick: "alice", ts: "2026-04-30T00:00:00Z" },
     { event_type: "join", nick: "bob", ts: "2026-04-30T00:00:01Z" },
+    { event_type: "join", nick: "charlie", ts: "2026-04-30T00:00:01.5Z" },
     { nick: "eve", text: "real chat", ts: "2026-04-30T00:00:02Z" },
     { event_type: "join", nick: "carol", ts: "2026-04-30T00:00:03Z" },
     { event_type: "join", nick: "dave", ts: "2026-04-30T00:00:04Z" },
@@ -393,4 +394,53 @@ test("part and nick presence events collapse by type", () => {
   assert.equal(partOut[0].text, "alice, bob, carol left");
   assert.equal(nickOut.length, 1);
   assert.equal(nickOut[0].text, "3 users changed nick");
+});
+
+test("sync.snapshot populates buffer list and is idempotent", () => {
+  const st = createChatState();
+  st.receiveSnapshot({
+    buffers: [
+      { id: "chan:#a", type: "channel", label: "#a" },
+      { id: "chan:#b", type: "channel", label: "#b" },
+      { id: "dm:alice", type: "dm", label: "alice" },
+    ]
+  });
+
+  const buffers = st.listBuffers();
+  assert.equal(buffers.length, 4); // Mentions + 3 from snapshot
+  assert.ok(buffers.find(b => b.id === "chan:#a"));
+  assert.ok(buffers.find(b => b.id === "chan:#b"));
+  assert.ok(buffers.find(b => b.id === "dm:alice"));
+
+  // Idempotency check (now replaces, so only Mentions + #a)
+  st.receiveSnapshot({
+    buffers: [
+      { id: "chan:#a", type: "channel", label: "#a" },
+    ]
+  });
+  assert.equal(st.listBuffers().length, 2);
+
+  // Replacement/Removal check
+  st.receiveSnapshot({
+    buffers: [
+      { id: "chan:#b", type: "channel", label: "#b" },
+    ]
+  });
+  const finalBuffers = st.listBuffers();
+  assert.equal(finalBuffers.length, 2); // Mentions + #b
+  assert.ok(finalBuffers.find(b => b.id === "chan:#b"));
+  assert.ok(!finalBuffers.find(b => b.id === "chan:#a"));
+});
+
+test("markRead resets unread count", () => {
+  const st = createChatState();
+  st.activateTarget("#a");
+  recv(st, "#b", "alice");
+  
+  const bBefore = st.listBuffers().find(x => x.id === "chan:#b");
+  assert.equal(bBefore.unread, 1);
+
+  st.markRead("chan:#b");
+  const bAfter = st.listBuffers().find(x => x.id === "chan:#b");
+  assert.equal(bAfter.unread, 0);
 });

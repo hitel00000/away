@@ -11,6 +11,7 @@ const targetField = document.getElementById("target-field");
 const sendButton = document.getElementById("send-button");
 const bufferList = document.getElementById("buffer-list");
 const activeTitle = document.getElementById("active-title");
+const sidebarToggle = document.getElementById("sidebar-toggle");
 
 const PENDING_TIMEOUT_MS = 10000;
 const pendingMessageTimeouts = new Map();
@@ -77,6 +78,21 @@ function renderBuffers() {
     item.addEventListener("click", () => {
       state.setActiveBuffer(buf.id);
       targetField.value = buf.label;
+      
+      // Wire to existing protocol: send mark_read command
+      const command = {
+        type: "mark_read",
+        payload: {
+          target: buf.id
+        }
+      };
+      ws.send(JSON.stringify(command));
+      
+      // Close sidebar on mobile after selection
+      if (window.innerWidth <= 768) {
+        bufferList.classList.remove("open");
+      }
+      
       render();
     });
 
@@ -126,6 +142,13 @@ ws.onmessage = (event) => {
         message: payload.message || null,
       });
       render();
+      return;
+    }
+
+    if (ev.type === "sync.snapshot") {
+      state.receiveSnapshot(ev.payload || {});
+      render();
+      return;
     }
   } catch (e) {
     console.error("parse error", e);
@@ -179,3 +202,9 @@ window.sendMessage = function sendMessage(event) {
   inputField.value = "";
   render();
 };
+
+if (sidebarToggle) {
+  sidebarToggle.addEventListener("click", () => {
+    bufferList.classList.toggle("open");
+  });
+}

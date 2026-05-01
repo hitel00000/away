@@ -26,6 +26,10 @@ type SendMessagePayload struct {
 	Target   string `json:"target"`
 }
 
+type MarkReadPayload struct {
+	Target string `json:"target"`
+}
+
 var irssiCommandFifo = "/tmp/away/irc-companion.cmd"
 
 func init() {
@@ -95,6 +99,26 @@ func Handler(hub *Hub) http.Handler {
 					log.Printf("fifo: %v", err)
 				}
 
+			} else if cmd.Type == "mark_read" {
+				var payload MarkReadPayload
+				if err := json.Unmarshal(cmd.Payload, &payload); err != nil {
+					log.Printf("failed to parse mark_read payload: %v", err)
+					continue
+				}
+				log.Printf("received mark_read: %q", payload.Target)
+
+				line, err := json.Marshal(map[string]any{
+					"action": "mark_read",
+					"target": payload.Target,
+				})
+
+				if err != nil {
+					return
+				}
+
+				if err := writeFifo(line); err != nil {
+					log.Printf("fifo: %v", err)
+				}
 			}
 		}
 	})
