@@ -1,73 +1,102 @@
 # NOW.md
 
-Current focus: Phase 0.2 complete / entering Phase 0.3
+Current focus:
 
-## Completed (Phase 0.2 Usability Pass)
+Fix the smallest set of issues required to make the app usable.
 
-- [x] F-001 Buffer / Unread Correctness
-- [x] F-002 Mention Inbox MVP
-- [x] F-003 Send Acknowledgement
-- [x] F-004 Presence Noise Collapse
-
-Phase 0.2 is considered complete.
-
-System now has:
-
-- multi-buffer navigation
-- unread correctness
-- mentions inbox
-- optimistic send feedback
-- presence noise reduction
-
-The “daily companion” loop exists.
+No new features beyond observed friction.
 
 ---
 
-## Current mode
+## What to do (in order)
 
-Stabilize and validate through real use.
+### 1. Fix correctness issues first
 
-Use the system.
-Watch for pain points.
-Prefer learning over feature growth.
+- fix duplicate buffers on reload
+- ensure buffer list reflects actual joined channels
 
-Do not expand scope casually.
-
----
-
-## Next candidate
-
-Primary next spike:
-
-- [ ] G-001 Append-Only Event Journal Spike
-
-Goal:
-Survive relay/browser restart with recent context.
-
-Keep it tiny.
-
-No sqlite.
-No persistence framework.
-Just a spike.
+If data feels inconsistent, fix that before anything else.
 
 ---
 
-## After G-001 reassess
+### 2. Make basic navigation usable
 
-Possible outcomes:
+- show all joined buffers from snapshot
+- allow switching without confusion
 
-1. Stop at lightweight local-first companion.
-2. Explore G-002 search spike.
-3. Reprioritize based on real usage pain.
+No sorting, no grouping, no polish.
 
-No commitment yet.
+Just make it usable.
 
 ---
 
-## Rules
+### 3. Add minimal read handling
 
-- favor simplicity over capability
-- preserve single-user companion scope
-- minimal patches
-- avoid infrastructure drift
-- reassess before new phase expansion
+- implement basic mark_read
+- allow clearing unread manually
+
+Do not implement precise read positions.
+
+---
+
+### 4. Make it barely usable on mobile
+
+Limit scope strictly:
+
+- channel list toggle (show/hide)
+- message view full width
+- input fixed at bottom
+
+Do not attempt full responsive design.
+
+---
+
+### 5. Clean up obvious UI friction
+
+Only fix what blocks usage:
+
+- spacing consistency
+- readable font sizes
+- reduce visual noise
+
+Do NOT:
+
+- redesign layout
+- introduce design system
+- refactor components
+
+---
+
+## What NOT to do
+
+- do not start G-002 (search)
+- do not introduce new persistence layers
+- do not redesign state management
+- do not optimize prematurely
+
+If something feels like a “nice improvement”,
+it is probably out of scope.
+
+---
+
+## Working style
+
+- make small patches
+- test in real usage immediately
+- commit frequently
+- stop when it feels “good enough”
+
+---
+
+## Exit condition
+
+Stop when:
+
+- you can comfortably read and reply from phone
+- reconnect does not confuse you
+- buffer navigation is not frustrating
+
+Then:
+
+→ update TASKS.md
+→ identify next real need (not assumed need)

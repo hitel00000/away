@@ -38,37 +38,8 @@ Phase 0.2 complete.
 
 # Phase 0.3 — Lightweight Persistence
 
-Goal:
-
-Survive restarts with minimal complexity.
-
----
-
 ## G-001 Append-Only Event Journal Spike
 Status: [x]
-
-Very small spike only.
-
-Implement:
-- append-only local event log
-- restore recent messages on restart
-- bounded recent history only
-
-Do NOT introduce:
-- sqlite
-- indexing layer
-- durable sync model
-
-Acceptance:
-- relay restart preserves recent context
-- implementation remains simple
-- complexity stays proportional
-
-Priority:
-High
-
-Depends on:
-Phase 0.2
 
 ---
 
@@ -88,10 +59,71 @@ G-001
 
 ---
 
+# Phase 0.4 — Real Usage Loop
+
+Goal:
+
+Validate that the system is actually usable in daily IRC workflow.
+
+---
+
+## H-001 Use In Real Conversations
+Status: [x]
+
+Use the system in real IRC sessions.
+
+Focus:
+
+- passive reading
+- occasional replies
+- reconnect scenarios
+
+Record:
+
+- friction points
+- missing primitives
+- surprising behavior
+
+Do NOT fix immediately unless critical.
+
+---
+
+## H-002 Identify Top 3 Frictions
+Status: [x]
+
+From real usage, identify:
+
+- top 3 UX issues
+- top 3 reliability issues
+
+Write them down explicitly.
+
+No implementation in this step.
+
+---
+
+## H-003 Targeted Fixes Only
+Status: [ ]
+
+Implement only:
+
+- show joined buffers from snapshot
+- fix duplicate buffer entries on reload
+- minimal mark_read (reset unread)
+- minimal mobile layout (list toggle + full-width chat)
+- basic UI cleanup (spacing, typography only)
+
+Do NOT:
+
+- redesign UI
+- introduce new state models
+- add advanced read tracking
+
+---
+
 # Deferred (Not Now)
 
-Explicit non-tasks:
-
+- G-002 Search Spike
 - WebAuthn pairing
 - push notifications
 - sqlite database
@@ -102,7 +134,7 @@ Explicit non-tasks:
 - message threading
 - notification routing
 
-Do not start these.
+Do not start these until after Phase 0.4.
 
 ---
 
@@ -116,13 +148,3 @@ For each task:
 4. Do not refactor unrelated code.
 5. No speculative abstractions.
 6. If scope grows, stop.
-
----
-
-# Current Recommended Sequence
-
-1. Use current build in real conversations
-2. G-001
-3. Reassess
-
-Stop and reconsider after G-001.
