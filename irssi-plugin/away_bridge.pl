@@ -68,7 +68,16 @@ sub json_escape {
   $s =~ s/\r/\\r/g;
   $s =~ s/\t/\\t/g;
 
+  # D-007: Escape all other control characters (0x00-0x1F) to avoid "invalid character" errors in Go relay.
+  $s =~ s/([\x00-\x1F])/sprintf("\\u%04x", ord($1))/eg;
+
   return $s;
+}
+
+sub debug_print {
+    my ($msg) = @_;
+    return unless Irssi::settings_get_bool('away_debug');
+    Irssi::print("away_bridge: $msg");
 }
 
 #
@@ -118,13 +127,12 @@ sub flush_queue {
 }
 
 sub emit_json {
-  my ($line)=@_;
-
+  my ($line) = @_;
   push @outbound_queue, $line;
-  if (scalar @outbound_queue > $MAX_QUEUE) {
+  if (@outbound_queue > $MAX_QUEUE) {
+      debug_print("queue overflow, dropping oldest event");
       shift @outbound_queue;
   }
-
   flush_queue();
 }
 
@@ -202,18 +210,21 @@ sub emit_snapshot {
 # message public: SERVER_REC, char *msg, char *nick, char *address, char *target
 sub on_public {
   my ($server, $text, $nick, $address, $target) = @_;
+  debug_print("on_public triggered for $target");
   emit_json(public_event_json($server, $target, $nick, $text, ""));
 }
 
 # message private: SERVER_REC, char *msg, char *nick, char *address, char *target
 sub on_private {
   my ($server, $text, $nick, $address, $target) = @_;
+  debug_print("on_private triggered for $nick");
   emit_json(private_event_json($server, $nick, $text, ""));
 }
 
 # message own_public: SERVER_REC, char *msg, char *target
 sub on_own_public {
   my ($server, $text, $target) = @_;
+  debug_print("on_own_public triggered for $target");
   my $client_id = shift @pending_ids || "";
   emit_json(public_event_json($server, $target, $server->{nick}, $text, $client_id));
 }
@@ -221,6 +232,7 @@ sub on_own_public {
 # message own_private: SERVER_REC, char *msg, char *target, char *orig_target
 sub on_own_private {
   my ($server, $text, $target, $orig_target) = @_;
+  debug_print("on_own_private triggered for $target");
   my $client_id = shift @pending_ids || "";
   emit_json(private_event_json($server, $target, $text, $client_id));
 }
@@ -246,7 +258,7 @@ sub init_command_fifo {
       return;
   };
 
-  Irssi::print("away_bridge command fifo ready");
+  debug_print("command fifo ready");
 }
 
 # NOTE: We use regex for parsing instead of JSON::PP because some irssi
@@ -295,7 +307,7 @@ sub poll_commands {
   
       my $target_read = parse_mark_read($line);
       if ($target_read) {
-          Irssi::print("away_bridge: mark_read $target_read (wire ack)");
+          debug_print("mark_read $target_read (wire ack)");
           next;
       }
 
@@ -334,4 +346,6 @@ emit_snapshot();
 Irssi::timeout_add(250, 'poll_commands', undef);
 Irssi::timeout_add(5000, 'flush_queue', undef);
 
-Irssi::print("away_bridge loaded (D-003a plumbing)");
+Irssi::settings_add_bool('away', 'away_debug', 0);
+
+Irssi::print("away_bridge: loaded (D-003a plumbing)");
