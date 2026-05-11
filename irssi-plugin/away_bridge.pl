@@ -74,6 +74,92 @@ sub json_escape {
   return $s;
 }
 
+sub html_escape {
+  my ($s) = @_;
+  return '' unless defined $s;
+  $s =~ s/&/&amp;/g;
+  $s =~ s/</&lt;/g;
+  $s =~ s/>/&gt;/g;
+  $s =~ s/"/&quot;/g;
+  $s =~ s/'/&#039;/g;
+  return $s;
+}
+
+sub irc_to_html {
+  my ($s) = @_;
+  return '' unless defined $s;
+  
+  $s = html_escape($s);
+
+  my $bold = 0;
+  my $italic = 0;
+  my $underline = 0;
+  my $fgColor = -1;
+  my $bgColor = -1;
+
+  my $result = "";
+
+  my $close_tags = sub {
+    my $res = "";
+    if ($fgColor != -1 || $bgColor != -1) { $res .= "</span>"; }
+    if ($underline) { $res .= "</u>"; }
+    if ($italic) { $res .= "</i>"; }
+    if ($bold) { $res .= "</b>"; }
+    return $res;
+  };
+
+  my $open_tags = sub {
+    my $res = "";
+    if ($bold) { $res .= "<b>"; }
+    if ($italic) { $res .= "<i>"; }
+    if ($underline) { $res .= "<u>"; }
+    if ($fgColor != -1 || $bgColor != -1) {
+      my @cls;
+      push @cls, "irc-fg-$fgColor" if $fgColor != -1;
+      push @cls, "irc-bg-$bgColor" if $bgColor != -1;
+      $res .= '<span class="' . join(' ', @cls) . '">';
+    }
+    return $res;
+  };
+
+  my @tokens = split //, $s;
+  for (my $i=0; $i < @tokens; $i++) {
+    my $char = $tokens[$i];
+    if ($char eq "\x02") {
+      $result .= $close_tags->();
+      $bold = !$bold;
+      $result .= $open_tags->();
+    } elsif ($char eq "\x1D") {
+      $result .= $close_tags->();
+      $italic = !$italic;
+      $result .= $open_tags->();
+    } elsif ($char eq "\x1F") {
+      $result .= $close_tags->();
+      $underline = !$underline;
+      $result .= $open_tags->();
+    } elsif ($char eq "\x0F") {
+      $result .= $close_tags->();
+      $bold = 0; $italic = 0; $underline = 0; $fgColor = -1; $bgColor = -1;
+    } elsif ($char eq "\x03") {
+      $result .= $close_tags->();
+      my $rem = substr($s, $i+1);
+      if ($rem =~ /^(\d{1,2})(?:,(\d{1,2}))?/) {
+        $fgColor = int($1);
+        $bgColor = defined $2 ? int($2) : -1;
+        $i += length($&);
+      } else {
+        $fgColor = -1;
+        $bgColor = -1;
+      }
+      $result .= $open_tags->();
+    } else {
+      $result .= $char;
+    }
+  }
+  $result .= $close_tags->();
+  return $result;
+}
+
 sub debug_print {
     my ($msg) = @_;
     return unless Irssi::settings_get_bool('away_debug');
@@ -152,8 +238,8 @@ sub public_event_json {
       iso_ts(),
       json_escape($server->{tag}),
       json_escape($target),
-      json_escape($nick),
-      json_escape($text),
+      json_escape(html_escape($nick)),
+      json_escape(irc_to_html($text)),
       json_escape($client_id),
   );
 }
@@ -167,8 +253,8 @@ sub private_event_json {
       event_id(),
       iso_ts(),
       json_escape($server->{tag}),
-      json_escape($nick),
-      json_escape($text),
+      json_escape(html_escape($nick)),
+      json_escape(irc_to_html($text)),
       json_escape($client_id),
   );
 }
