@@ -1,305 +1,119 @@
 # PROTOCOL
 
-Away wire protocol and data formats.
+Away internal wire protocol and formats (irssi ↔ relayd).
 
 ---
 
 # 1. Transport
 
-- WebSocket (/ws)
-- JSON messages
-- newline-delimited on plugin side (NDJSON)
+All communications between the irssi Perl plugin and the Go relay backend (`relayd`) occur over local UNIX domain sockets and FIFOs using Newline-Delimited JSON (NDJSON).
+
+- **Ingress (IRC to Relay)**: Stream socket at `/tmp/away/irc-companion.sock`
+- **Egress (Relay to IRC)**: Named pipe (FIFO) at `/tmp/away/irc-companion.cmd`
 
 ---
 
-# 2. Envelope Types
+# 2. Ingress Events (Perl Plugin ➔ Go Relay)
 
-## Server → Client
+Every event sent from the Perl plugin over `/tmp/away/irc-companion.sock` has the following envelope:
 
-```json id="proto-event"
+```json
 {
-  "kind": "event",
-  "body": {}
-}
-````
-
----
-
-## Client → Server
-
-```json id="proto-command"
-{
-  "kind": "command",
-  "body": {}
-}
-```
-
----
-
-## System
-
-```json id="proto-heartbeat"
-{
-  "kind": "heartbeat"
-}
-```
-
----
-
-# 3. Events
-
-All events follow:
-
-```json id="proto-event-envelope"
-{
-  "type": "message.created",
+  "type": "event_type",
   "version": 1,
-  "id": "evt_123",
-  "timestamp": "ISO8601",
+  "id": "evt_timestamp_random",
+  "timestamp": "ISO8601_Timestamp",
   "payload": {}
 }
 ```
 
----
+### 2.1 `message.created` (Public Channel Messages)
 
-## Properties
+Emitted when a new message is received or sent in a channel.
 
-* id: globally unique
-* timestamp: event time
-* payload: type-specific
-
----
-
-# 4. Core Event Types
-
-## message.created
-
-```json id="proto-msg"
+```json
 {
   "type": "message.created",
+  "version": 1,
+  "id": "evt_1718712345678_9999",
+  "timestamp": "2026-06-18T08:15:00Z",
   "payload": {
     "network": "libera",
-    "buffer_id": "chan:#golang",
+    "buffer_id": "chan:#away",
+    "buffer_type": "channel",
     "nick": "alice",
-    "text": "hello"
+    "text": "hello world",
+    "highlight": false,
+    "tags": [],
+    "client_id": ""
   }
 }
 ```
 
----
+### 2.2 `dm.created` (Private Query Messages)
 
-## dm.created
+Emitted when a private message (query) is received or sent.
 
-```json id="proto-dm"
+```json
 {
   "type": "dm.created",
+  "version": 1,
+  "id": "evt_1718712345679_8888",
+  "timestamp": "2026-06-18T08:15:01Z",
   "payload": {
+    "network": "libera",
     "peer": "bob",
-    "text": "ping"
+    "text": "are you there?",
+    "client_id": ""
   }
 }
 ```
 
----
+### 2.3 `sync.snapshot` (Active Channel List)
 
-## highlight.created
+Emitted periodically or on join/part events to sync the list of active/joined buffers.
 
-```json id="proto-highlight"
-{
-  "type": "highlight.created",
-  "payload": {
-    "buffer_id": "...",
-    "text": "...",
-    "priority": "normal"
-  }
-}
-```
-
----
-
-## presence.*
-
-* presence.join
-* presence.part
-* presence.quit
-* nick.changed
-
----
-
-## buffer.updated
-
-```json id="proto-buffer"
-{
-  "type": "buffer.updated",
-  "payload": {
-    "buffer_id": "...",
-    "unread": 10,
-    "mentions": 1
-  }
-}
-```
-
----
-
-# 5. Snapshot (Special Case)
-
-Snapshot uses event envelope but is NOT an event.
-
-```json id="proto-snapshot"
+```json
 {
   "type": "sync.snapshot",
+  "version": 1,
+  "id": "evt_1718712345680_7777",
+  "timestamp": "2026-06-18T08:15:02Z",
   "payload": {
-    "buffers": [...],
-    "active_buffer": "..."
+    "buffers": [
+      {"id": "chan:#away", "type": "channel", "label": "#away"},
+      {"id": "chan:#go", "type": "channel", "label": "#go"},
+      {"id": "dm:bob", "type": "dm", "label": "bob"}
+    ]
   }
 }
 ```
 
 ---
 
-## ⚠️ Rules
+# 3. Egress Commands (Go Relay ➔ Perl Plugin)
 
-* NOT stored in journal
-* NOT replayed
-* ONLY sent during init or fallback
+Commands are written as single-line JSON strings to the FIFO pipe at `/tmp/away/irc-companion.cmd`.
 
----
+### 3.1 `send_message`
 
-# 6. Commands
+Instructs irssi to send a message to a specific channel or nick.
 
-## send_message
-
-```json id="proto-send"
+```json
 {
   "action": "send_message",
-  "payload": {
-    "target": "#foo",
-    "text": "hello"
-  }
+  "target": "#away",
+  "text": "response from discord"
 }
 ```
 
----
+### 3.2 `mark_read`
 
-## irc_command
+Instructs irssi to clear unread highlighting or status for a channel.
 
-```json id="proto-irc"
-{
-  "action": "irc_command",
-  "payload": {
-    "command": "/whois alice"
-  }
-}
-```
-
----
-
-## mark_read
-
-```json id="proto-read"
+```json
 {
   "action": "mark_read",
-  "payload": {
-    "buffer_id": "chan:#foo"
-  }
+  "target": "#away"
 }
 ```
-
----
-
-## fetch_backlog
-
-```json id="proto-backlog"
-{
-  "action": "fetch_backlog",
-  "payload": {
-    "buffer_id": "...",
-    "before": "evt_123",
-    "limit": 100
-  }
-}
-```
-
----
-
-# 7. Reconnect Protocol
-
-Client may send:
-
-```json id="proto-resume"
-{
-  "resume_from": "evt_9211"
-}
-```
-
----
-
-## Server behavior
-
-1. if possible:
-   → replay events after id
-
-2. if not:
-   → send snapshot
-
-3. then:
-   → continue live stream
-
----
-
-# 8. Ordering Rules
-
-* events must be applied in order
-* snapshot resets ordering context
-* no event before snapshot on init
-
----
-
-# 9. Idempotency
-
-Client must:
-
-* ignore duplicate event_id
-* handle replay safely
-
----
-
-# 10. Error Handling
-
-Future:
-
-```json id="proto-error"
-{
-  "type": "system.error",
-  "payload": {
-    "message": "..."
-  }
-}
-```
-
----
-
-# 11. Versioning
-
-* version field per event
-* no silent schema changes
-* backward compatibility preferred
-
----
-
-# 12. Invariants
-
-* event_id uniqueness
-* snapshot boundary respected
-* no mixed snapshot/event replay
-* deterministic reconnect
-
----
-
-# 13. Philosophy
-
-Protocol favors:
-
-* simplicity over completeness
-* explicit boundaries over magic
-* correctness over convenience

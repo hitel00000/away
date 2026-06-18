@@ -1,33 +1,33 @@
 # ARCHITECTURE
 
-Away system architecture and state model.
+Away system architecture and state model (Discord-based).
 
 ---
 
 # 1. Overview
 
-Away is a relay-based companion system for irssi.
+Away is a relay-based companion system for irssi that bridges IRC communication to Discord.
 
 It separates:
 
-- event production (irssi)
-- state materialization (relay)
-- interaction surface (client)
+- Event Production: irssi (via Perl plugin)
+- Bridging & Event Translation: Go Relay (`relayd`) running as a Discord Bot
+- Interaction Surface: Official Discord Client (Mobile/Desktop/Web)
 
 ---
 
 # 2. System Diagram
 
-```id="arch-diagram"
-
-PWA Client
-↓ WebSocket
-Relay (state authority)
-↓ Unix socket
-irssi plugin (event emitter)
+```
+Discord App (Client)
+↓ HTTPS / WebSocket (Gateway)
+Discord API
 ↓
-irssi (source of truth)
-
+Relay (relayd / Go)
+↓ Unix socket
+irssi plugin (away_bridge.pl / Perl)
+↓
+irssi (IRC client / Source of Truth)
 ```
 
 ---
@@ -35,263 +35,45 @@ irssi (source of truth)
 # 3. Core Responsibilities
 
 ## irssi
+- Maintains actual IRC sessions and canonical connections.
 
-- maintains real IRC session
-- holds canonical live connection state
+## irssi plugin (away_bridge.pl)
+- Emits structured events (JSON) over a Unix socket.
+- Receives send commands from `relayd` via Unix FIFO.
+- Emits: `message.created`, `dm.created`, `sync.snapshot`.
 
----
+## Relay (relayd)
+- Runs as a Discord Bot in a dedicated, private Discord Server (Guild).
+- Ingests events from irssi plugin:
+  - Dynamically creates/manages Discord channels in a private Guild.
+  - Maps active channels under `💬 ACTIVE CHANNELS` category.
+  - Relays IRC public/private messages to corresponding Discord channels.
+- Egresses messages from Discord:
+  - Listens to user messages in text channels within the target Guild.
+  - Forwards user messages back to the irssi command FIFO.
 
-## irssi plugin
-
-- emits structured events
-- does NOT store state
-- does NOT build snapshots
-
-Allowed outputs:
-
-- message.created
-- dm.created
-- highlight.created
-- presence.*
-
----
-
-## relay
-
-The most important component.
-
-Responsibilities:
-
-- maintains materialized state
-- stores event journal (append-only)
-- builds snapshots
-- handles reconnect and replay
-- mediates commands
+## Client (Discord App)
+- Renders the channels and messages.
+- Handles user connection state, notifications, push alerts, and typing indicators natively.
 
 ---
 
-## client (PWA)
+# 4. Channel Mapping & Lifecycle
 
-- renders state
-- sends commands
-- holds ephemeral UI state
+Away maps IRC buffers to Discord channels:
 
----
+- **IRC Channels**: Mapped to `#🟢-channelname` when active, or `#⚪-channelname` when inactive/parted.
+- **IRC DMs / Queries**: Mapped to `#👤-nickname` under the active category.
+- **Categories**:
+  - `💬 ACTIVE CHANNELS`: Channels currently joined.
+  - `💤 INACTIVE CHANNELS`: Channels currently parted or inactive queries.
 
-# 4. State Model
-
-Away uses a hybrid model:
-
-- event sourcing (for changes)
-- materialized state (for usability)
+State changes (Join/Part) trigger automatic channel renaming and category migration by the bot.
 
 ---
 
-## 4.1 Events
-
-Events represent changes:
-
-- immutable
-- ordered
-- replayable
-
-Stored in journal.
-
----
-
-## 4.2 Snapshot
-
-Snapshot represents current state.
-
-It is:
-
-- derived from relay state
-- NOT part of event stream
-- NOT stored in journal
-
----
-
-## ⚠️ Critical Rule
-
-Snapshot is NOT an event.
-
-Mixing snapshot into event stream causes:
-
-- ordering corruption
-- replay inconsistency
-- state duplication
-
----
-
-# 5. State Flow
-
-## 5.1 Initial Connection
-
-```id="state-init"
-
-client connects
-→ relay builds snapshot
-→ relay sends snapshot
-→ relay starts event stream
-
-```
-
----
-
-## 5.2 Reconnect
-
-```id="state-reconnect"
-
-client reconnects with resume_from
-→ relay attempts replay
-→ if replay fails:
-send snapshot
-→ continue streaming
-
-```
-
----
-
-## 5.3 Event Processing
-
-```id="state-events"
-
-plugin emits event
-→ relay appends to journal
-→ relay updates state
-→ relay pushes to clients
-
-```
-
----
-
-# 6. Buffer Model
-
-Buffers are primary units of interaction.
-
-Examples:
-
-```id="buffer-ids"
-
-chan:#golang
-pm:alice
-system:mentions
-
-```
-
-Relay maintains:
-
-- buffer list
-- unread counts
-- mention counts
-- last activity
-
----
-
-# 7. Source of Truth
-
-There are two layers:
-
-## irssi
-
-- source of live IRC state
-
-## relay
-
-- source of application state
-
-These are NOT identical.
-
----
-
-# 8. Initial State Seeding
-
-Relay cannot reconstruct state from nothing.
-
-Therefore plugin must provide:
-
-- initial buffer list (event-based)
-
-Example:
-
-```
-
-buffer.opened (one per buffer)
-
-```
-
-This is NOT a snapshot.
-
-It is a seed.
-
----
-
-# 9. Persistence
-
-Event journal:
-
-- append-only
-- used for replay
-
-Materialized state:
-
-- in-memory (primary)
-- optional persistence (SQLite)
-
----
-
-# 10. Failure Model
-
-System must tolerate:
-
-- network disconnects
-- relay restarts
-- client reloads
-
-Guarantees:
-
-- no duplicated events
-- no missing buffers
-- consistent unread state
-
----
-
-# 11. Design Constraints
-
-- single-user system
-- trusted environment
-- minimal auth (for now)
-- correctness over features
-
----
-
-# 12. Non-Goals
-
-- multi-tenant architecture
-- full IRC client replacement
-- distributed consensus
-- perfect event sourcing fidelity
-
----
-
-# 13. Key Invariants
-
-These must always hold:
-
-- snapshot is never in journal
-- events are never mutated
-- event_id is unique
-- replay is deterministic
-- snapshot fully replaces client state
-
----
-
-# 14. Mental Model
-
-Think of the system as:
-
-- irssi → produces signals
-- relay → builds reality
-- client → views reality
-
-If these roles blur, bugs appear.
+# 5. Non-Goals
+
+- Multi-tenant architecture (designed strictly for one user in their private Discord server).
+- Replacing irssi configuration or authentication.
+- Implementing a full Discord integration beyond bridging text chat and status.
