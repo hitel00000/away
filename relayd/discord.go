@@ -160,6 +160,9 @@ func (b *DiscordBridge) handleIRCMessage(p MessagePayload) {
 	if p.BufferType != "channel" {
 		return
 	}
+	if p.ClientID == "discord" {
+		return
+	}
 	rawChanName := strings.TrimPrefix(p.BufferID, "chan:")
 	chID, err := b.getOrCreateTextChannel(rawChanName, b.activeCatID)
 	if err != nil {
@@ -172,6 +175,9 @@ func (b *DiscordBridge) handleIRCMessage(p MessagePayload) {
 }
 
 func (b *DiscordBridge) handleIRCDM(p DMPayload) {
+	if p.ClientID == "discord" {
+		return
+	}
 	target := "dm:" + p.Peer
 	chID, err := b.getOrCreateTextChannel(target, b.activeCatID)
 	if err != nil {
@@ -318,9 +324,10 @@ func (b *DiscordBridge) messageCreate(s *discordgo.Session, m *discordgo.Message
 	}
 
 	line, err := json.Marshal(map[string]any{
-		"action": "send_message",
-		"target": ircTarget,
-		"text":   m.Content,
+		"action":    "send_message",
+		"target":    ircTarget,
+		"text":      m.Content,
+		"client_id": "discord",
 	})
 	if err != nil {
 		return

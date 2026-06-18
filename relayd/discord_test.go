@@ -85,6 +85,9 @@ func TestDiscordBridge_MessageCreate(t *testing.T) {
 	if parsedPublic["text"] != "hello channel" {
 		t.Errorf("expected text 'hello channel', got %v", parsedPublic["text"])
 	}
+	if parsedPublic["client_id"] != "discord" {
+		t.Errorf("expected client_id discord, got %v", parsedPublic["client_id"])
+	}
 
 	// Clear temp file content
 	_ = os.WriteFile(tmpFile.Name(), []byte{}, 0644)
@@ -119,5 +122,8 @@ func TestDiscordBridge_MessageCreate(t *testing.T) {
 	}
 	if parsedDM["text"] != "hello alice" {
 		t.Errorf("expected text 'hello alice', got %v", parsedDM["text"])
+	}
+	if parsedDM["client_id"] != "discord" {
+		t.Errorf("expected client_id discord, got %v", parsedDM["client_id"])
 	}
 }
