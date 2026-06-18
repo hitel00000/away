@@ -207,6 +207,9 @@ func TestE2E_Reconnect_RelayRestart(t *testing.T) {
 	ircConn.Write([]byte(evLine1))
 	ircConn.Close()
 
+	// Wait for server to process and write to journal
+	time.Sleep(100 * time.Millisecond)
+
 	// Restart server
 	server1.cleanup()
 

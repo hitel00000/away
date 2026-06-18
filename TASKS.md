@@ -82,140 +82,66 @@ Status: [x]
 ---
 
 ## H-005 Snapshot Ownership Fix
-Status: [ ]
-
-Goal:
-
-Move snapshot responsibility from irssi plugin to relay.
-
-Reason:
-
-Current implementation treats snapshot as an event,
-causing ordering issues, replay inconsistency,
-and state corruption.
-
----
-
-Tasks:
-
-- [ ] remove `sync.snapshot` emission from irssi plugin
-
-- [ ] ensure plugin only emits:
-      - message.created
-      - highlight.created
-      - presence.*
-
-- [ ] implement initial buffer dump from plugin
-      (event-based, one-time seed only)
-
-- [ ] implement `buildSnapshot()` in relay
-      using in-memory or persisted state
-
-- [ ] send snapshot only during websocket init
-
-- [ ] ensure snapshot is NOT stored in event journal
-
-- [ ] ensure snapshot is NOT replayed
-
-- [ ] client: treat snapshot as full state replace
-      (not reducer-based merge)
-
----
-
-Acceptance:
-
-- snapshot never appears in journal
-- snapshot always arrives before first live event
-- reconnect produces consistent buffer list
-- no duplicate / missing buffers after reload
+Status: [deferred] (due to Discord Pivot)
 
 ---
 
 ## H-006 Reconnect & Resume Correctness
-Status: [ ]
-
-Goal:
-
-Ensure reconnect behavior is deterministic and safe.
-
----
-
-Tasks:
-
-- [ ] implement `resume_from` handling in relay
-
-- [ ] replay events strictly AFTER given event_id
-
-- [ ] fallback to snapshot if replay not possible
-
-- [ ] guarantee no duplicate events on reconnect
-
-- [ ] ensure ordering: snapshot → replay → live
-
----
-
-Acceptance:
-
-- reconnect never causes message duplication
-- reconnect never loses messages
-- reconnect preserves scroll position semantics
+Status: [deferred] (due to Discord Pivot)
 
 ---
 
 ## H-007 Event Stream Correctness
-Status: [ ]
-
-Goal:
-
-Ensure event stream behaves predictably under all conditions.
-
----
-
-Tasks:
-
-- [ ] dedupe events by event_id
-
-- [ ] enforce ordering (timestamp vs arrival consistency)
-
-- [ ] verify no out-of-order application in client
-
-- [ ] ensure snapshot boundary is respected
-
----
-
-Acceptance:
-
-- no duplicate messages visible
-- no ordering glitches during heavy traffic
-- consistent state after long sessions
+Status: [deferred] (due to Discord Pivot)
 
 ---
 
 ## H-008 Minimal Auth (Session Layer)
-Status: [ ]
+Status: [deferred] (due to Discord Pivot)
+
+---
+
+# Phase 0.5 — Discord Pivot
 
 Goal:
 
-Introduce minimal session identity without full auth complexity.
+Pivot the client interface from custom PWA to a private Discord Server.
 
 ---
+
+## I-001 Discord Bot Initialization
+Status: [x]
 
 Tasks:
-
-- [ ] introduce temporary device_id
-
-- [ ] bind websocket session to device_id
-
-- [ ] basic handshake validation
-
-- [ ] prepare structure for future trusted devices
+- [x] add `discordgo` dependency to Go relayd
+- [x] implement Discord client connection using token from env
+- [x] verify connection with basic logging/ping
 
 ---
 
-Acceptance:
+## I-002 Ingestion to Discord Bridge
+Status: [x]
 
-- multiple clients do not conflict
-- session identity is stable across reconnect
+Tasks:
+- [x] relay `message.created` events from irssi to matching Discord channels
+- [x] dynamically create channels (`🟢-채널명`, `👤-닉네임`) under `💬 ACTIVE CHANNELS` category
+
+---
+
+## I-003 Discord to IRC Egress Bridge
+Status: [x]
+
+Tasks:
+- [x] listen to user messages in text channels
+- [x] send message contents back to IRC unix socket for `/msg`
+
+---
+
+## I-004 Presence & Join/Part Sync
+Status: [x]
+
+Tasks:
+- [x] update channel names (e.g. `🟢-` to `⚪-`) and categories (`💬 ACTIVE` to `💤 INACTIVE`) on Join/Part events
 
 ---
 

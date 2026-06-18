@@ -15,6 +15,7 @@ type Hub struct {
 	clients map[*Client]struct{}
 	ring    *relayd.EventRing
 	journal *relayd.EventJournal
+	onEvent func(relayd.Event)
 }
 
 func NewHub(ring *relayd.EventRing, journal *relayd.EventJournal) *Hub {
@@ -23,6 +24,12 @@ func NewHub(ring *relayd.EventRing, journal *relayd.EventJournal) *Hub {
 		ring:    ring,
 		journal: journal,
 	}
+}
+
+func (h *Hub) OnEvent(fn func(relayd.Event)) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.onEvent = fn
 }
 
 func (h *Hub) Register(c *Client) {
@@ -69,6 +76,13 @@ func (h *Hub) BroadcastEvent(ev relayd.Event) error {
 		if err := h.journal.Append(ev); err != nil {
 			log.Printf("journal append failed: %v", err)
 		}
+	}
+
+	h.mu.Lock()
+	listener := h.onEvent
+	h.mu.Unlock()
+	if listener != nil {
+		listener(ev)
 	}
 
 	for _, c := range clients {

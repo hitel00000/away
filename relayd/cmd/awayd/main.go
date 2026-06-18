@@ -40,6 +40,16 @@ func main() {
 
 	hub := ws.NewHub(ring, journal)
 
+	discordBridge := relayd.NewDiscordBridge()
+	if discordBridge != nil {
+		hub.OnEvent(discordBridge.HandleEvent)
+		if err := discordBridge.Start(); err != nil {
+			log.Printf("discord bridge startup failed: %v", err)
+		} else {
+			defer discordBridge.Close()
+		}
+	}
+
 	ircSocket := "/tmp/away/irc-companion.sock"
 	if val := os.Getenv("AWAY_IRC_SOCKET"); val != "" {
 		ircSocket = val

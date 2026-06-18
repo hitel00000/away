@@ -2,81 +2,51 @@
 
 ## 🎯 Current Goal
 
-Make the system **state-safe under reconnect and initial load**.
-
-Not adding features.
-Fixing correctness.
+Pivot the client interface from custom PWA to a private Discord Server (Discord Bot Pivot).
 
 ---
 
 ## 🔥 Top Priority (Do in order)
 
-1. H-005 Snapshot Ownership Fix
+1. I-001 Discord Bot Initialization
 
-   - remove snapshot from plugin
-   - move snapshot creation to relay
-   - ensure snapshot is NOT part of journal
-
----
-
-2. H-006 Reconnect & Resume
-
-   - implement resume_from
-   - snapshot fallback when replay fails
-   - guarantee no duplication
+   - add `discordgo` dependency to Go relayd
+   - implement Discord client connection using token from env
+   - verify connection with basic logging/ping
 
 ---
 
-3. H-007 Event Stream Correctness
+2. I-002 Ingestion to Discord Bridge
 
-   - dedupe by event_id
-   - enforce ordering
-   - fix snapshot boundary issues
+   - relay `message.created` events from irssi to matching Discord channels
+   - dynamically create channels (`🟢-채널명`, `👤-닉네임`) under `💬 ACTIVE CHANNELS` category
 
 ---
 
-## ⚠️ Stop Conditions
+3. I-003 Discord to IRC Egress Bridge
 
-Stop immediately and fix if:
+   - listen to user messages in text channels
+   - send message contents back to IRC unix socket for `/msg`
 
-- snapshot appears in journal
-- reconnect duplicates messages
-- buffers disappear or duplicate
-- unread count becomes inconsistent
-- message order flips
+---
+
+4. I-004 Presence & Join/Part Sync
+
+   - update channel names (e.g. `🟢-` to `⚪-`) and categories (`💬 ACTIVE` to `💤 INACTIVE`) on Join/Part events
 
 ---
 
 ## 🧪 Mandatory Test Loop
 
-Repeat constantly:
-
-1. open client
-2. receive messages
-3. disconnect network
-4. reconnect
-5. verify:
-   - buffers intact
-   - unread correct
-   - no duplication
-   - ordering preserved
+1. Run irssi and relayd
+2. Send message from IRC, check if bot creates channel and sends message to Discord
+3. Send message from Discord, check if message is relayed back to IRC
+4. Join/Part channel on IRC, check if emoji prefix and category updates on Discord
 
 ---
 
 ## ❌ Do NOT Work On
 
-- UI polish
-- search
-- push notifications
-- auth beyond minimal session
-- new features
-
----
-
-## 🧠 Reminder
-
-Snapshot is NOT an event.
-
-It is a state reset boundary.
-
-If treated like an event, everything breaks.
+- Custom PWA client (`web/` updates)
+- Custom session auth or WebSocket snapshot logic
+- UI polish or search in web client
