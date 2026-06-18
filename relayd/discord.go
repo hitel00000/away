@@ -20,6 +20,10 @@ type DiscordBridge struct {
 	activeCatID   string
 	inactiveCatID string
 	fifoPath      string
+
+	// Cache structures: target <-> channel ID mapping
+	cache      map[string]string // ircTarget -> channelID
+	idToTarget map[string]string // channelID -> ircTarget
 }
 
 type BufferInfo struct {
@@ -64,9 +68,11 @@ func NewDiscordBridge() *DiscordBridge {
 	}
 
 	return &DiscordBridge{
-		token:    token,
-		guildID:  guildID,
-		fifoPath: fifoPath,
+		token:      token,
+		guildID:    guildID,
+		fifoPath:   fifoPath,
+		cache:      make(map[string]string),
+		idToTarget: make(map[string]string),
 	}
 }
 
@@ -76,27 +82,27 @@ func (b *DiscordBridge) Start() error {
 		return err
 	}
 	b.session = dg
-
-	// Register event handlers
 	dg.AddHandler(b.messageCreate)
 
-	err = dg.Open()
-	if err != nil {
+	if err = dg.Open(); err != nil {
 		return err
 	}
 
-	// Resolve active/inactive categories
 	activeCat, err := b.getOrCreateCategory("💬 ACTIVE CHANNELS")
 	if err != nil {
-		return fmt.Errorf("failed to create active category: %w", err)
+		return fmt.Errorf("active category: %w", err)
 	}
 	b.activeCatID = activeCat
 
 	inactiveCat, err := b.getOrCreateCategory("💤 INACTIVE CHANNELS")
 	if err != nil {
-		return fmt.Errorf("failed to create inactive category: %w", err)
+		return fmt.Errorf("inactive category: %w", err)
 	}
 	b.inactiveCatID = inactiveCat
+
+	if err := b.loadChannels(); err != nil {
+		return fmt.Errorf("load channels: %w", err)
+	}
 
 	log.Println("Discord bot connected and running.")
 	return nil
@@ -108,150 +114,73 @@ func (b *DiscordBridge) Close() {
 	}
 }
 
-func (b *DiscordBridge) HandleEvent(ev Event) {
-	switch ev.Type {
-	case "message.created":
-		var p MessagePayload
-		if err := json.Unmarshal(ev.Payload, &p); err != nil {
-			log.Printf("discord: failed to unmarshal message payload: %v", err)
-			return
-		}
-		b.handleIRCMessage(p)
-
-	case "dm.created":
-		var p DMPayload
-		if err := json.Unmarshal(ev.Payload, &p); err != nil {
-			log.Printf("discord: failed to unmarshal dm payload: %v", err)
-			return
-		}
-		b.handleIRCDM(p)
-
-	case "sync.snapshot":
-		var p SnapshotPayload
-		if err := json.Unmarshal(ev.Payload, &p); err != nil {
-			log.Printf("discord: failed to unmarshal snapshot payload: %v", err)
-			return
-		}
-		b.reconcileChannels(p.Buffers)
-	}
-}
-
-func (b *DiscordBridge) handleIRCMessage(p MessagePayload) {
-	// Only bridge channel messages (DM has its own event type)
-	if p.BufferType != "channel" {
-		return
-	}
-	// Sanitize channel name
-	rawChanName := strings.TrimPrefix(p.BufferID, "chan:")
-	chanName := sanitizeChannelName("🟢", rawChanName)
-
-	chID, err := b.getOrCreateTextChannel(chanName, b.activeCatID)
-	if err != nil {
-		log.Printf("discord: failed to get/create channel %s: %v", chanName, err)
-		return
-	}
-
-	content := fmt.Sprintf("**<%s>** %s", p.Nick, p.Text)
-	if _, err := b.session.ChannelMessageSend(chID, content); err != nil {
-		log.Printf("discord: failed to send message: %v", err)
-	}
-}
-
-func (b *DiscordBridge) handleIRCDM(p DMPayload) {
-	chanName := sanitizeChannelName("👤", p.Peer)
-
-	chID, err := b.getOrCreateTextChannel(chanName, b.activeCatID)
-	if err != nil {
-		log.Printf("discord: failed to get/create dm channel %s: %v", chanName, err)
-		return
-	}
-
-	content := fmt.Sprintf("**<%s>** %s", p.Peer, p.Text)
-	if _, err := b.session.ChannelMessageSend(chID, content); err != nil {
-		log.Printf("discord: failed to send dm message: %v", err)
-	}
-}
-
-func (b *DiscordBridge) reconcileChannels(activeBuffers []BufferInfo) {
+func (b *DiscordBridge) loadChannels() error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
 	channels, err := b.session.GuildChannels(b.guildID)
 	if err != nil {
-		log.Printf("discord: failed to fetch guild channels for reconcile: %v", err)
-		return
-	}
-
-	// Build map of expected active channel names
-	expectedActive := make(map[string]bool)
-	for _, buf := range activeBuffers {
-		var name string
-		if buf.Type == "channel" {
-			name = sanitizeChannelName("🟢", strings.TrimPrefix(buf.ID, "chan:"))
-		} else if buf.Type == "dm" {
-			name = sanitizeChannelName("👤", strings.TrimPrefix(buf.ID, "dm:"))
-		}
-		if name != "" {
-			expectedActive[name] = true
-		}
+		return err
 	}
 
 	for _, c := range channels {
 		if c.Type != discordgo.ChannelTypeGuildText {
 			continue
 		}
-
-		isIRCChannel := strings.HasPrefix(c.Name, "🟢-") || strings.HasPrefix(c.Name, "⚪-") || strings.HasPrefix(c.Name, "👤-")
-		if !isIRCChannel {
-			continue
-		}
-
-		cleanName := c.Name
-		var baseName string
-		var isDM bool
-
-		if strings.HasPrefix(cleanName, "🟢-") {
-			baseName = strings.TrimPrefix(cleanName, "🟢-")
-		} else if strings.HasPrefix(cleanName, "⚪-") {
-			baseName = strings.TrimPrefix(cleanName, "⚪-")
-		} else if strings.HasPrefix(cleanName, "👤-") {
-			baseName = strings.TrimPrefix(cleanName, "👤-")
-			isDM = true
-		}
-
-		expectedActiveName := cleanName
-		if !isDM {
-			expectedActiveName = "🟢-" + baseName
-		}
-
-		if expectedActive[expectedActiveName] {
-			// Should be active
-			if strings.HasPrefix(c.Name, "⚪-") || c.ParentID != b.activeCatID {
-				newName := c.Name
-				if !isDM {
-					newName = "🟢-" + baseName
-				}
-				log.Printf("discord: activating channel %s -> %s", c.Name, newName)
-				_, _ = b.session.ChannelEditComplex(c.ID, &discordgo.ChannelEdit{
-					Name:     newName,
-					ParentID: b.activeCatID,
-				})
-			}
-		} else {
-			// Should be inactive
-			if strings.HasPrefix(c.Name, "🟢-") || c.ParentID != b.inactiveCatID {
-				newName := c.Name
-				if !isDM {
-					newName = "⚪-" + baseName
-				}
-				log.Printf("discord: deactivating channel %s -> %s", c.Name, newName)
-				_, _ = b.session.ChannelEditComplex(c.ID, &discordgo.ChannelEdit{
-					Name:     newName,
-					ParentID: b.inactiveCatID,
-				})
-			}
+		if strings.HasPrefix(c.Topic, "irc-target:") {
+			target := strings.TrimSpace(strings.TrimPrefix(c.Topic, "irc-target:"))
+			b.cache[target] = c.ID
+			b.idToTarget[c.ID] = target
 		}
 	}
+	return nil
+}
+
+func (b *DiscordBridge) HandleEvent(ev Event) {
+	switch ev.Type {
+	case "message.created":
+		var p MessagePayload
+		if err := json.Unmarshal(ev.Payload, &p); err == nil {
+			b.handleIRCMessage(p)
+		}
+	case "dm.created":
+		var p DMPayload
+		if err := json.Unmarshal(ev.Payload, &p); err == nil {
+			b.handleIRCDM(p)
+		}
+	case "sync.snapshot":
+		var p SnapshotPayload
+		if err := json.Unmarshal(ev.Payload, &p); err == nil {
+			b.reconcileChannels(p.Buffers)
+		}
+	}
+}
+
+func (b *DiscordBridge) handleIRCMessage(p MessagePayload) {
+	if p.BufferType != "channel" {
+		return
+	}
+	rawChanName := strings.TrimPrefix(p.BufferID, "chan:")
+	chID, err := b.getOrCreateTextChannel(rawChanName, b.activeCatID)
+	if err != nil {
+		log.Printf("discord: get/create channel failed: %v", err)
+		return
+	}
+
+	content := fmt.Sprintf("**<%s>** %s", p.Nick, p.Text)
+	_, _ = b.session.ChannelMessageSend(chID, content)
+}
+
+func (b *DiscordBridge) handleIRCDM(p DMPayload) {
+	target := "dm:" + p.Peer
+	chID, err := b.getOrCreateTextChannel(target, b.activeCatID)
+	if err != nil {
+		log.Printf("discord: get/create dm channel failed: %v", err)
+		return
+	}
+
+	content := fmt.Sprintf("**<%s>** %s", p.Peer, p.Text)
+	_, _ = b.session.ChannelMessageSend(chID, content)
 }
 
 func (b *DiscordBridge) getOrCreateCategory(name string) (string, error) {
@@ -275,83 +204,122 @@ func (b *DiscordBridge) getOrCreateCategory(name string) (string, error) {
 	return newChan.ID, nil
 }
 
-func (b *DiscordBridge) getOrCreateTextChannel(name, categoryID string) (string, error) {
+func (b *DiscordBridge) getOrCreateTextChannel(target, categoryID string) (string, error) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	channels, err := b.session.GuildChannels(b.guildID)
+	if id, exists := b.cache[target]; exists {
+		return id, nil
+	}
+
+	name := sanitizeTargetName(target)
+	topic := "irc-target: " + target
+
+	newChan, err := b.session.GuildChannelCreateComplex(b.guildID, discordgo.GuildChannelCreateData{
+		Name:     name,
+		Type:     discordgo.ChannelTypeGuildText,
+		ParentID: categoryID,
+		Topic:    topic,
+	})
 	if err != nil {
 		return "", err
 	}
 
-	// Try matching active/inactive states
-	baseName := name
-	if strings.HasPrefix(name, "🟢-") {
-		baseName = strings.TrimPrefix(name, "🟢-")
-	} else if strings.HasPrefix(name, "👤-") {
-		baseName = strings.TrimPrefix(name, "👤-")
+	b.cache[target] = newChan.ID
+	b.idToTarget[newChan.ID] = target
+	return newChan.ID, nil
+}
+
+func (b *DiscordBridge) reconcileChannels(activeBuffers []BufferInfo) {
+	b.mu.Lock()
+	activeMap := make(map[string]bool)
+	for _, buf := range activeBuffers {
+		target := strings.TrimPrefix(buf.ID, "chan:")
+		activeMap[target] = true
 	}
+	b.mu.Unlock()
+
+	channels, err := b.session.GuildChannels(b.guildID)
+	if err != nil {
+		log.Printf("discord: reconcile failed to fetch channels: %v", err)
+		return
+	}
+
+	b.mu.Lock()
+	defer b.mu.Unlock()
 
 	for _, c := range channels {
 		if c.Type != discordgo.ChannelTypeGuildText {
 			continue
 		}
-		if c.Name == name || c.Name == "🟢-"+baseName || c.Name == "⚪-"+baseName {
-			// Channel exists, ensure it is in the target category and named correctly
-			if c.ParentID != categoryID || c.Name != name {
-				_, _ = b.session.ChannelEditComplex(c.ID, &discordgo.ChannelEdit{
-					Name:     name,
-					ParentID: categoryID,
-				})
-			}
-			return c.ID, nil
+		target, ok := b.idToTarget[c.ID]
+		if !ok {
+			continue
+		}
+
+		if activeMap[target] {
+			b.activateChannel(c, target)
+		} else {
+			b.deactivateChannel(c, target)
 		}
 	}
+}
 
-	// Create new channel
-	newChan, err := b.session.GuildChannelCreate(b.guildID, name, discordgo.ChannelTypeGuildText)
-	if err != nil {
-		return "", err
+func (b *DiscordBridge) activateChannel(c *discordgo.Channel, target string) {
+	cleanName := sanitizeTargetName(target)
+
+	if strings.HasPrefix(c.Name, "⚪-") || c.ParentID != b.activeCatID {
+		log.Printf("discord: activating channel %s -> %s", c.Name, cleanName)
+		_, _ = b.session.ChannelEditComplex(c.ID, &discordgo.ChannelEdit{
+			Name:     cleanName,
+			ParentID: b.activeCatID,
+		})
+	}
+}
+
+func (b *DiscordBridge) deactivateChannel(c *discordgo.Channel, target string) {
+	isDM := strings.HasPrefix(target, "dm:")
+	if isDM {
+		if c.ParentID != b.inactiveCatID {
+			log.Printf("discord: deactivating dm channel %s", c.Name)
+			_, _ = b.session.ChannelEditComplex(c.ID, &discordgo.ChannelEdit{
+				ParentID: b.inactiveCatID,
+			})
+		}
+		return
 	}
 
-	_, _ = b.session.ChannelEditComplex(newChan.ID, &discordgo.ChannelEdit{
-		ParentID: categoryID,
-	})
-
-	return newChan.ID, nil
+	baseName := strings.TrimPrefix(sanitizeTargetName(target), "🟢-")
+	inactiveName := "⚪-" + baseName
+	if c.Name != inactiveName || c.ParentID != b.inactiveCatID {
+		log.Printf("discord: deactivating channel %s -> %s", c.Name, inactiveName)
+		_, _ = b.session.ChannelEditComplex(c.ID, &discordgo.ChannelEdit{
+			Name:     inactiveName,
+			ParentID: b.inactiveCatID,
+		})
+	}
 }
 
 func (b *DiscordBridge) messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
-	if m.Author.ID == s.State.User.ID {
+	if m.Author.ID == s.State.User.ID || m.GuildID != b.guildID {
 		return
 	}
 
-	// Check if message is in our target guild
-	if m.GuildID != b.guildID {
+	b.mu.Lock()
+	target, exists := b.idToTarget[m.ChannelID]
+	b.mu.Unlock()
+	if !exists {
 		return
 	}
 
-	ch, err := s.Channel(m.ChannelID)
-	if err != nil {
-		return
+	ircTarget := target
+	if strings.HasPrefix(target, "dm:") {
+		ircTarget = strings.TrimPrefix(target, "dm:")
 	}
 
-	// Match channel prefixes to determine targets
-	var target string
-	if strings.HasPrefix(ch.Name, "🟢-") {
-		target = "#" + strings.TrimPrefix(ch.Name, "🟢-")
-	} else if strings.HasPrefix(ch.Name, "⚪-") {
-		target = "#" + strings.TrimPrefix(ch.Name, "⚪-")
-	} else if strings.HasPrefix(ch.Name, "👤-") {
-		target = strings.TrimPrefix(ch.Name, "👤-")
-	} else {
-		return
-	}
-
-	// Forward message to IRC command FIFO
 	line, err := json.Marshal(map[string]any{
 		"action": "send_message",
-		"target": target,
+		"target": ircTarget,
 		"text":   m.Content,
 	})
 	if err != nil {
@@ -359,7 +327,7 @@ func (b *DiscordBridge) messageCreate(s *discordgo.Session, m *discordgo.Message
 	}
 
 	if err := b.writeFifo(line); err != nil {
-		log.Printf("discord: failed to write to command FIFO: %v", err)
+		log.Printf("discord: command FIFO write failed: %v", err)
 	}
 }
 
@@ -375,7 +343,15 @@ func (b *DiscordBridge) writeFifo(line []byte) error {
 	return nil
 }
 
-func sanitizeChannelName(prefix, name string) string {
+func sanitizeTargetName(target string) string {
+	if strings.HasPrefix(target, "dm:") {
+		peer := strings.TrimPrefix(target, "dm:")
+		return "👤-" + cleanDiscordName(peer)
+	}
+	return "🟢-" + cleanDiscordName(target)
+}
+
+func cleanDiscordName(name string) string {
 	name = strings.ReplaceAll(name, "#", "")
 	name = strings.ToLower(name)
 	var cleaned strings.Builder
@@ -386,5 +362,5 @@ func sanitizeChannelName(prefix, name string) string {
 			cleaned.WriteRune('-')
 		}
 	}
-	return prefix + "-" + cleaned.String()
+	return cleaned.String()
 }
