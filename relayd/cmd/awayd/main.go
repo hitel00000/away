@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strconv"
 )
 
@@ -25,6 +26,9 @@ func main() {
 		if n, err := strconv.Atoi(val); err == nil && n > 0 {
 			journalMax = n
 		}
+	}
+	if err := os.MkdirAll(filepath.Dir(journalPath), 0755); err != nil {
+		log.Fatalf("failed to create journal directory: %v", err)
 	}
 	journal := relayd.NewEventJournal(journalPath, journalMax)
 	if recent, err := journal.LoadRecent(); err != nil {
@@ -53,6 +57,10 @@ func main() {
 	ircSocket := "/tmp/away/irc-companion.sock"
 	if val := os.Getenv("AWAY_IRC_SOCKET"); val != "" {
 		ircSocket = val
+	}
+
+	if err := os.MkdirAll(filepath.Dir(ircSocket), 0755); err != nil {
+		log.Fatalf("failed to create socket directory: %v", err)
 	}
 
 	_ = os.Remove(ircSocket)

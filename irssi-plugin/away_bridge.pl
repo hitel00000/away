@@ -5,6 +5,8 @@ use Irssi;
 use IO::Socket::UNIX;
 use Time::HiRes qw(time);
 use Fcntl qw(O_RDONLY O_NONBLOCK);
+use File::Basename;
+use File::Path qw(make_path);
 
 our $VERSION = '0.3';
 
@@ -330,6 +332,14 @@ sub on_own_private {
 #
 
 sub init_command_fifo {
+
+  my $dir = dirname($CMD_FIFO);
+  unless (-d $dir) {
+      eval { make_path($dir); };
+      if ($@) {
+          system("mkdir", "-p", $dir);
+      }
+  }
 
   unless (-p $CMD_FIFO) {
       system("mkfifo",$CMD_FIFO);
