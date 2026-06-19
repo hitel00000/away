@@ -157,12 +157,12 @@ Tasks:
 ---
 
 ## I-006 Normalize Terminal Escape / HTML in irssi Bridge
-Status: [ ]
+Status: [x]
 
 Tasks:
-- [ ] Strip or translate HTML tags (e.g. `<b>`, `<i>`) to Discord Markdown (e.g. `**`, `*`)
-- [ ] Convert HTML entities (e.g. `&lt;`, `&gt;`, `&amp;`) back to raw plain text characters
-- [ ] Decide parsing boundaries: clean formatting in irssi bridge Perl plugin or normalize in Go relayd ingestion layer
+- [x] Strip or translate HTML tags (e.g. `<b>`, `<i>`) to Discord Markdown (e.g. `**`, `*`)
+- [x] Convert HTML entities (e.g. `&lt;`, `&gt;`, `&amp;`) back to raw plain text characters
+- [x] Decide parsing boundaries: clean formatting in irssi bridge Perl plugin or normalize in Go relayd ingestion layer
 
 ---
 
