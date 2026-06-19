@@ -293,7 +293,7 @@ func (b *DiscordBridge) getOrCreateWebhook(channelID string) (*discordgo.Webhook
 	webhooks, err := b.session.ChannelWebhooks(channelID)
 	if err == nil {
 		for _, wh := range webhooks {
-			if wh.Name == "Away-Bridge" {
+			if wh.Name == "Away-Bridge" && wh.Token != "" {
 				b.webhooks[channelID] = wh
 				return wh, nil
 			}
