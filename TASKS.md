@@ -145,6 +145,38 @@ Tasks:
 
 ---
 
+## I-005 Spoof Sender Names via Webhooks
+Status: [ ]
+
+Tasks:
+- [ ] Create and cache Discord Webhooks per target text channel to avoid repeated creation API calls
+- [ ] Implement Go relay function to send messages via Webhook execution endpoint
+- [ ] Pass the IRC nickname to Webhook `username` parameter
+- [ ] Generate deterministic avatar URLs based on IRC nickname (e.g. ui-avatars.com or RoboHash) and pass to Webhook `avatar_url`
+
+---
+
+## I-006 Normalize Terminal Escape / HTML in irssi Bridge
+Status: [ ]
+
+Tasks:
+- [ ] Strip or translate HTML tags (e.g. `<b>`, `<i>`) to Discord Markdown (e.g. `**`, `*`)
+- [ ] Convert HTML entities (e.g. `&lt;`, `&gt;`, `&amp;`) back to raw plain text characters
+- [ ] Decide parsing boundaries: clean formatting in irssi bridge Perl plugin or normalize in Go relayd ingestion layer
+
+---
+
+## I-007 Handle Relay Bots & Nested Senders
+Status: [ ]
+
+Tasks:
+- [ ] Implement config option for known relay bot nicks (e.g. `||`)
+- [ ] Parse nested sender pattern from message text (e.g., `<jw> message` or `[jw] message` inside the text body)
+- [ ] Override the sender's nickname and message text with extracted values when relay bot match is detected
+- [ ] Forward the extracted sender name to the Discord Webhook bridge (display as `jw (via ||)` or similar to indicate bridged/relayed status)
+
+---
+
 # Deferred (Not Now)
 
 - WebAuthn pairing
