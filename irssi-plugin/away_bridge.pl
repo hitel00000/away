@@ -188,12 +188,11 @@ sub flush_queue {
       $last_conn_try = $now;
 
       $event_sock = IO::Socket::UNIX->new(
-          Type    => SOCK_STREAM,
-          Peer    => $EVENT_SOCKET,
-          Timeout => 0.2,
+          Type     => SOCK_STREAM,
+          Peer     => $EVENT_SOCKET,
+          Blocking => 0,
       );
       if ($event_sock) {
-          $event_sock->blocking(0);
           $event_sock->autoflush(1);
       }
   }
