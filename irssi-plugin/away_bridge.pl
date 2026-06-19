@@ -35,6 +35,7 @@ my $cmd_fh;
 our @outbound_queue = ();
 our $MAX_QUEUE      = 100;
 our $event_sock;
+our $last_conn_try = 0;
 
 # D-003a: FIFO queue for opaque client_id correlation.
 # Assumption: Irssi signals for own messages arrive in the same order
@@ -178,14 +179,21 @@ sub flush_queue {
 
   return 1 unless @outbound_queue;
 
-  # Try to connect if not connected
+  # Try to connect if not connected with cooldown
   unless ($event_sock) {
+      my $now = time();
+      if ($now - $last_conn_try < 5) {
+          return 1;
+      }
+      $last_conn_try = $now;
+
       $event_sock = IO::Socket::UNIX->new(
           Type    => SOCK_STREAM,
           Peer    => $EVENT_SOCKET,
-          Timeout => 1,
+          Timeout => 0.2,
       );
       if ($event_sock) {
+          $event_sock->blocking(0);
           $event_sock->autoflush(1);
       }
   }
