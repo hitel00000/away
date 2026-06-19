@@ -39,17 +39,20 @@ irssi (IRC client / Source of Truth)
 
 ## irssi plugin (away_bridge.pl)
 - Emits structured events (JSON) over a Unix socket.
-- Receives send commands from `relayd` via Unix FIFO.
 - Emits: `message.created`, `dm.created`, `sync.snapshot`.
+- Implements fully non-blocking socket connections with a 5-second cooldown throttle to ensure zero irssi UI lag when `relayd` is down.
+- Receives send commands from `relayd` via Unix FIFO.
 
 ## Relay (relayd)
 - Runs as a Discord Bot in a dedicated, private Discord Server (Guild).
 - Ingests events from irssi plugin:
   - Dynamically creates/manages Discord channels in a private Guild.
   - Maps active channels under `💬 ACTIVE CHANNELS` category.
-  - Relays IRC public/private messages to corresponding Discord channels.
+  - Relays IRC public/private messages to corresponding Discord channels using **cached Webhooks** per channel to spoof sender names (IRC nicks) and avatars (via RoboHash).
+  - Normalizes HTML tags (e.g. `<b>`, `<i>`) to Discord Markdown (e.g. `**`, `*`) and unescapes HTML entities.
+  - Parses nested sender patterns (e.g. `<jw> message` or `jw: message`) from known relay bots (configured via `AWAY_DISCORD_RELAY_BOTS`) to display real nicknames as `nick (via relay)`.
 - Egresses messages from Discord:
-  - Listens to user messages in text channels within the target Guild.
+  - Listens to user messages in text channels within the target Guild (ignoring bots and webhooks to prevent loopbacks).
   - Forwards user messages back to the irssi command FIFO.
 
 ## Client (Discord App)
