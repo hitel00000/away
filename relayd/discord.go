@@ -417,7 +417,7 @@ func (b *DiscordBridge) deactivateChannel(c *discordgo.Channel, target string) {
 }
 
 func (b *DiscordBridge) messageCreate(s *discordgo.Session, m *discordgo.MessageCreate) {
-	if m.Author.ID == s.State.User.ID || m.GuildID != b.guildID {
+	if m.Author.ID == s.State.User.ID || m.Author.Bot || m.WebhookID != "" || m.GuildID != b.guildID {
 		return
 	}
 
