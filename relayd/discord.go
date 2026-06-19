@@ -23,6 +23,7 @@ type DiscordBridge struct {
 	activeCatID   string
 	inactiveCatID string
 	fifoPath      string
+	relayBots     []string // Known relay bots list
 
 	// Cache structures: target <-> channel ID mapping
 	cache      map[string]string             // ircTarget -> channelID
@@ -71,6 +72,19 @@ func NewDiscordBridge() *DiscordBridge {
 		fifoPath = val
 	}
 
+	// Load relay bots list
+	relayBots := []string{"||"} // Default
+	if val := os.Getenv("AWAY_DISCORD_RELAY_BOTS"); val != "" {
+		parts := strings.Split(val, ",")
+		relayBots = make([]string, 0, len(parts))
+		for _, p := range parts {
+			trimmed := strings.TrimSpace(p)
+			if trimmed != "" {
+				relayBots = append(relayBots, trimmed)
+			}
+		}
+	}
+
 	return &DiscordBridge{
 		token:      token,
 		guildID:    guildID,
@@ -78,6 +92,7 @@ func NewDiscordBridge() *DiscordBridge {
 		cache:      make(map[string]string),
 		idToTarget: make(map[string]string),
 		webhooks:   make(map[string]*discordgo.Webhook),
+		relayBots:  relayBots,
 	}
 }
 
@@ -176,9 +191,18 @@ func (b *DiscordBridge) handleIRCMessage(p MessagePayload) {
 	}
 
 	cleanedText := CleanHTMLForDiscord(p.Text)
-	if err := b.sendWebhookMessage(chID, p.Nick, cleanedText); err != nil {
+	nick := p.Nick
+
+	if b.isRelayBot(nick) {
+		if nestedNick, nestedMsg, ok := parseNestedSender(cleanedText); ok {
+			nick = nestedNick + " (via " + nick + ")"
+			cleanedText = nestedMsg
+		}
+	}
+
+	if err := b.sendWebhookMessage(chID, nick, cleanedText); err != nil {
 		log.Printf("discord: webhook send failed, falling back to ChannelMessageSend: %v", err)
-		content := fmt.Sprintf("**<%s>** %s", p.Nick, cleanedText)
+		content := fmt.Sprintf("**<%s>** %s", nick, cleanedText)
 		_, _ = b.session.ChannelMessageSend(chID, content)
 	}
 }
@@ -195,9 +219,18 @@ func (b *DiscordBridge) handleIRCDM(p DMPayload) {
 	}
 
 	cleanedText := CleanHTMLForDiscord(p.Text)
-	if err := b.sendWebhookMessage(chID, p.Peer, cleanedText); err != nil {
+	nick := p.Peer
+
+	if b.isRelayBot(nick) {
+		if nestedNick, nestedMsg, ok := parseNestedSender(cleanedText); ok {
+			nick = nestedNick + " (via " + nick + ")"
+			cleanedText = nestedMsg
+		}
+	}
+
+	if err := b.sendWebhookMessage(chID, nick, cleanedText); err != nil {
 		log.Printf("discord: webhook send failed, falling back to ChannelMessageSend: %v", err)
-		content := fmt.Sprintf("**<%s>** %s", p.Peer, cleanedText)
+		content := fmt.Sprintf("**<%s>** %s", nick, cleanedText)
 		_, _ = b.session.ChannelMessageSend(chID, content)
 	}
 }
@@ -463,4 +496,35 @@ func CleanHTMLForDiscord(s string) string {
 
 	s = html.UnescapeString(s)
 	return s
+}
+
+func (b *DiscordBridge) isRelayBot(nick string) bool {
+	for _, bot := range b.relayBots {
+		if bot == nick {
+			return true
+		}
+	}
+	return false
+}
+
+var nestedPatterns = []*regexp.Regexp{
+	regexp.MustCompile(`^<([^>]+)>\s*(.*)$`),
+	regexp.MustCompile(`^\[([^\]]+)\]\s*(.*)$`),
+	regexp.MustCompile(`^\(([^)]+)\)\s*(.*)$`),
+	regexp.MustCompile(`^([a-zA-Z0-9_\-\[\]\\^` + "`" + `{|}\x7f]+):\s*(.*)$`),
+}
+
+func parseNestedSender(text string) (string, string, bool) {
+	text = strings.TrimSpace(text)
+	for _, re := range nestedPatterns {
+		matches := re.FindStringSubmatch(text)
+		if len(matches) == 3 {
+			nick := strings.TrimSpace(matches[1])
+			msg := strings.TrimSpace(matches[2])
+			if nick != "" && msg != "" {
+				return nick, msg, true
+			}
+		}
+	}
+	return "", "", false
 }

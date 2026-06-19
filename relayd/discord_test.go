@@ -239,3 +239,31 @@ func TestCleanHTMLForDiscord(t *testing.T) {
 		}
 	}
 }
+
+func TestParseNestedSender(t *testing.T) {
+	tests := []struct {
+		input     string
+		expectedN string
+		expectedM string
+		expectedO bool
+	}{
+		{"<jw> hello", "jw", "hello", true},
+		{"[jw] hello", "jw", "hello", true},
+		{"(jw) hello", "jw", "hello", true},
+		{"jw: hello", "jw", "hello", true},
+		{"<jw_123> hello world", "jw_123", "hello world", true},
+		{"<jw (via ||)> hello", "jw (via ||)", "hello", true},
+		{"just a regular message", "", "", false},
+		{"no_colon_no_brackets", "", "", false},
+	}
+
+	for _, tc := range tests {
+		n, m, ok := parseNestedSender(tc.input)
+		if ok != tc.expectedO {
+			t.Errorf("parseNestedSender(%q) ok = %t, expected %t", tc.input, ok, tc.expectedO)
+		}
+		if n != tc.expectedN || m != tc.expectedM {
+			t.Errorf("parseNestedSender(%q) = (%q, %q), expected (%q, %q)", tc.input, n, m, tc.expectedN, tc.expectedM)
+		}
+	}
+}
