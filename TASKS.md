@@ -167,13 +167,13 @@ Tasks:
 ---
 
 ## I-007 Handle Relay Bots & Nested Senders
-Status: [ ]
+Status: [x]
 
 Tasks:
-- [ ] Implement config option for known relay bot nicks (e.g. `||`)
-- [ ] Parse nested sender pattern from message text (e.g., `<jw> message` or `[jw] message` inside the text body)
-- [ ] Override the sender's nickname and message text with extracted values when relay bot match is detected
-- [ ] Forward the extracted sender name to the Discord Webhook bridge (display as `jw (via ||)` or similar to indicate bridged/relayed status)
+- [x] Implement config option for known relay bot nicks (e.g. `||`)
+- [x] Parse nested sender pattern from message text (e.g., `<jw> message` or `[jw] message` inside the text body)
+- [x] Override the sender's nickname and message text with extracted values when relay bot match is detected
+- [x] Forward the extracted sender name to the Discord Webhook bridge (display as `jw (via ||)` or similar to indicate bridged/relayed status)
 
 ---
 
