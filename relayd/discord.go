@@ -3,9 +3,11 @@ package relayd
 import (
 	"encoding/json"
 	"fmt"
+	"html"
 	"log"
 	"net/url"
 	"os"
+	"regexp"
 	"strings"
 	"sync"
 	"syscall"
@@ -173,9 +175,10 @@ func (b *DiscordBridge) handleIRCMessage(p MessagePayload) {
 		return
 	}
 
-	if err := b.sendWebhookMessage(chID, p.Nick, p.Text); err != nil {
+	cleanedText := CleanHTMLForDiscord(p.Text)
+	if err := b.sendWebhookMessage(chID, p.Nick, cleanedText); err != nil {
 		log.Printf("discord: webhook send failed, falling back to ChannelMessageSend: %v", err)
-		content := fmt.Sprintf("**<%s>** %s", p.Nick, p.Text)
+		content := fmt.Sprintf("**<%s>** %s", p.Nick, cleanedText)
 		_, _ = b.session.ChannelMessageSend(chID, content)
 	}
 }
@@ -191,9 +194,10 @@ func (b *DiscordBridge) handleIRCDM(p DMPayload) {
 		return
 	}
 
-	if err := b.sendWebhookMessage(chID, p.Peer, p.Text); err != nil {
+	cleanedText := CleanHTMLForDiscord(p.Text)
+	if err := b.sendWebhookMessage(chID, p.Peer, cleanedText); err != nil {
 		log.Printf("discord: webhook send failed, falling back to ChannelMessageSend: %v", err)
-		content := fmt.Sprintf("**<%s>** %s", p.Peer, p.Text)
+		content := fmt.Sprintf("**<%s>** %s", p.Peer, cleanedText)
 		_, _ = b.session.ChannelMessageSend(chID, content)
 	}
 }
@@ -443,4 +447,20 @@ func cleanDiscordName(name string) string {
 		}
 	}
 	return cleaned.String()
+}
+
+var spanRegex = regexp.MustCompile(`</?span[^>]*>`)
+
+func CleanHTMLForDiscord(s string) string {
+	s = strings.ReplaceAll(s, "<b>", "**")
+	s = strings.ReplaceAll(s, "</b>", "**")
+	s = strings.ReplaceAll(s, "<i>", "*")
+	s = strings.ReplaceAll(s, "</i>", "*")
+	s = strings.ReplaceAll(s, "<u>", "__")
+	s = strings.ReplaceAll(s, "</u>", "__")
+
+	s = spanRegex.ReplaceAllString(s, "")
+
+	s = html.UnescapeString(s)
+	return s
 }

@@ -216,3 +216,26 @@ func TestDiscordBridge_WebhookSend(t *testing.T) {
 		t.Errorf("expected only 1 WebhookExecute call, got: %v", apiCalls)
 	}
 }
+
+func TestCleanHTMLForDiscord(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{"hello", "hello"},
+		{"<b>bold</b>", "**bold**"},
+		{"<i>italic</i>", "*italic*"},
+		{"<u>underline</u>", "__underline__"},
+		{"&lt;escaped&gt; &amp; &quot;quotes&quot;", "<escaped> & \"quotes\""},
+		{"<b>bold <i>italic</i></b>", "**bold *italic***"},
+		{"<span class=\"irc-fg-1 irc-bg-2\">colored</span> text", "colored text"},
+		{"<b>bold <span class=\"irc-fg-1\">colored</span></b>", "**bold colored**"},
+	}
+
+	for _, tc := range tests {
+		actual := CleanHTMLForDiscord(tc.input)
+		if actual != tc.expected {
+			t.Errorf("CleanHTMLForDiscord(%q) = %q, expected %q", tc.input, actual, tc.expected)
+		}
+	}
+}
