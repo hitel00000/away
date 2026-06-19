@@ -146,13 +146,13 @@ Tasks:
 ---
 
 ## I-005 Spoof Sender Names via Webhooks
-Status: [ ]
+Status: [x]
 
 Tasks:
-- [ ] Create and cache Discord Webhooks per target text channel to avoid repeated creation API calls
-- [ ] Implement Go relay function to send messages via Webhook execution endpoint
-- [ ] Pass the IRC nickname to Webhook `username` parameter
-- [ ] Generate deterministic avatar URLs based on IRC nickname (e.g. ui-avatars.com or RoboHash) and pass to Webhook `avatar_url`
+- [x] Create and cache Discord Webhooks per target text channel to avoid repeated creation API calls
+- [x] Implement Go relay function to send messages via Webhook execution endpoint
+- [x] Pass the IRC nickname to Webhook `username` parameter
+- [x] Generate deterministic avatar URLs based on IRC nickname (e.g. ui-avatars.com or RoboHash) and pass to Webhook `avatar_url`
 
 ---
 
