@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -22,8 +23,9 @@ type DiscordBridge struct {
 	fifoPath      string
 
 	// Cache structures: target <-> channel ID mapping
-	cache      map[string]string // ircTarget -> channelID
-	idToTarget map[string]string // channelID -> ircTarget
+	cache      map[string]string             // ircTarget -> channelID
+	idToTarget map[string]string             // channelID -> ircTarget
+	webhooks   map[string]*discordgo.Webhook // channelID -> Webhook
 }
 
 type BufferInfo struct {
@@ -73,6 +75,7 @@ func NewDiscordBridge() *DiscordBridge {
 		fifoPath:   fifoPath,
 		cache:      make(map[string]string),
 		idToTarget: make(map[string]string),
+		webhooks:   make(map[string]*discordgo.Webhook),
 	}
 }
 
@@ -170,8 +173,11 @@ func (b *DiscordBridge) handleIRCMessage(p MessagePayload) {
 		return
 	}
 
-	content := fmt.Sprintf("**<%s>** %s", p.Nick, p.Text)
-	_, _ = b.session.ChannelMessageSend(chID, content)
+	if err := b.sendWebhookMessage(chID, p.Nick, p.Text); err != nil {
+		log.Printf("discord: webhook send failed, falling back to ChannelMessageSend: %v", err)
+		content := fmt.Sprintf("**<%s>** %s", p.Nick, p.Text)
+		_, _ = b.session.ChannelMessageSend(chID, content)
+	}
 }
 
 func (b *DiscordBridge) handleIRCDM(p DMPayload) {
@@ -185,8 +191,11 @@ func (b *DiscordBridge) handleIRCDM(p DMPayload) {
 		return
 	}
 
-	content := fmt.Sprintf("**<%s>** %s", p.Peer, p.Text)
-	_, _ = b.session.ChannelMessageSend(chID, content)
+	if err := b.sendWebhookMessage(chID, p.Peer, p.Text); err != nil {
+		log.Printf("discord: webhook send failed, falling back to ChannelMessageSend: %v", err)
+		content := fmt.Sprintf("**<%s>** %s", p.Peer, p.Text)
+		_, _ = b.session.ChannelMessageSend(chID, content)
+	}
 }
 
 func (b *DiscordBridge) getOrCreateCategory(name string) (string, error) {
@@ -234,6 +243,70 @@ func (b *DiscordBridge) getOrCreateTextChannel(target, categoryID string) (strin
 	b.cache[target] = newChan.ID
 	b.idToTarget[newChan.ID] = target
 	return newChan.ID, nil
+}
+
+func (b *DiscordBridge) getOrCreateWebhook(channelID string) (*discordgo.Webhook, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	if wh, exists := b.webhooks[channelID]; exists {
+		return wh, nil
+	}
+
+	webhooks, err := b.session.ChannelWebhooks(channelID)
+	if err == nil {
+		for _, wh := range webhooks {
+			if wh.Name == "Away-Bridge" {
+				b.webhooks[channelID] = wh
+				return wh, nil
+			}
+		}
+	}
+
+	wh, err := b.session.WebhookCreate(channelID, "Away-Bridge", "")
+	if err != nil {
+		return nil, err
+	}
+
+	b.webhooks[channelID] = wh
+	return wh, nil
+}
+
+func (b *DiscordBridge) sendWebhookMessage(channelID, username, text string) error {
+	wh, err := b.getOrCreateWebhook(channelID)
+	if err != nil {
+		return err
+	}
+
+	avatarURL := "https://robohash.org/" + url.PathEscape(username) + ".png"
+
+	_, err = b.session.WebhookExecute(wh.ID, wh.Token, false, &discordgo.WebhookParams{
+		Content:   text,
+		Username:  username,
+		AvatarURL: avatarURL,
+	})
+
+	if err != nil {
+		if restErr, ok := err.(*discordgo.RESTError); ok && restErr.Message != nil && restErr.Message.Code == discordgo.ErrCodeUnknownWebhook {
+			log.Printf("discord: cached webhook not found (404), recreating: %v", err)
+			b.mu.Lock()
+			delete(b.webhooks, channelID)
+			b.mu.Unlock()
+
+			wh, err = b.getOrCreateWebhook(channelID)
+			if err != nil {
+				return err
+			}
+
+			_, err = b.session.WebhookExecute(wh.ID, wh.Token, false, &discordgo.WebhookParams{
+				Content:   text,
+				Username:  username,
+				AvatarURL: avatarURL,
+			})
+		}
+	}
+
+	return err
 }
 
 func (b *DiscordBridge) reconcileChannels(activeBuffers []BufferInfo) {

@@ -1,8 +1,12 @@
 package relayd
 
 import (
+	"bytes"
 	"encoding/json"
+	"io"
+	"net/http"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/bwmarrin/discordgo"
@@ -125,5 +129,90 @@ func TestDiscordBridge_MessageCreate(t *testing.T) {
 	}
 	if parsedDM["client_id"] != "discord" {
 		t.Errorf("expected client_id discord, got %v", parsedDM["client_id"])
+	}
+}
+
+type mockTransport struct {
+	roundTrip func(req *http.Request) (*http.Response, error)
+}
+
+func (t *mockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	return t.roundTrip(req)
+}
+
+func TestDiscordBridge_WebhookSend(t *testing.T) {
+	s, err := discordgo.New("Bot token")
+	if err != nil {
+		t.Fatalf("failed to create session: %v", err)
+	}
+	s.State.User = &discordgo.User{ID: "bot-id"}
+
+	var apiCalls []string
+	var mockWebhooks []*discordgo.Webhook
+
+	s.Client = &http.Client{
+		Transport: &mockTransport{
+			roundTrip: func(req *http.Request) (*http.Response, error) {
+				apiCalls = append(apiCalls, req.Method+" "+req.URL.Path)
+
+				if req.Method == "GET" && strings.HasSuffix(req.URL.Path, "/webhooks") {
+					respData, _ := json.Marshal(mockWebhooks)
+					return &http.Response{
+						StatusCode: http.StatusOK,
+						Body:       io.NopCloser(bytes.NewReader(respData)),
+						Header:     make(http.Header),
+					}, nil
+				}
+
+				if req.Method == "POST" && strings.HasSuffix(req.URL.Path, "/webhooks") {
+					wh := &discordgo.Webhook{
+						ID:        "wh-id-123",
+						Token:     "wh-token-abc",
+						Name:      "Away-Bridge",
+						ChannelID: "chan-123",
+					}
+					respData, _ := json.Marshal(wh)
+					return &http.Response{
+						StatusCode: http.StatusOK,
+						Body:       io.NopCloser(bytes.NewReader(respData)),
+						Header:     make(http.Header),
+					}, nil
+				}
+
+				if req.Method == "POST" && strings.Contains(req.URL.Path, "/webhooks/wh-id-123/wh-token-abc") {
+					return &http.Response{
+						StatusCode: http.StatusNoContent,
+						Body:       io.NopCloser(bytes.NewReader([]byte{})),
+						Header:     make(http.Header),
+					}, nil
+				}
+
+				return &http.Response{
+					StatusCode: http.StatusNotFound,
+					Body:       io.NopCloser(bytes.NewReader([]byte(`{"message": "Unknown Webhook", "code": 10015}`))),
+					Header:     make(http.Header),
+				}, nil
+			},
+		},
+	}
+
+	b := &DiscordBridge{
+		session:  s,
+		webhooks: make(map[string]*discordgo.Webhook),
+	}
+
+	err = b.sendWebhookMessage("chan-123", "alice", "hello")
+	if err != nil {
+		t.Fatalf("sendWebhookMessage failed: %v", err)
+	}
+
+	apiCalls = nil
+	err = b.sendWebhookMessage("chan-123", "alice", "hello again")
+	if err != nil {
+		t.Fatalf("sendWebhookMessage failed: %v", err)
+	}
+
+	if len(apiCalls) != 1 || !strings.Contains(apiCalls[0], "POST") {
+		t.Errorf("expected only 1 WebhookExecute call, got: %v", apiCalls)
 	}
 }
